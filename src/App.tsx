@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Auth from "./components/Auth";
+import FarmerDashboard from "./components/FarmerDashboard";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -51,10 +52,19 @@ const App = () => {
       </header>
 
       <main className="flex justify-center">
-        {view === "welcome" ? (
+        {view === "welcome" && (
           <Welcome role={role} onRoleChange={setRole} onGetStarted={() => setView("auth")} />
-        ) : (
-          <Auth role={role} onRoleChange={setRole} onBack={() => setView("welcome")} />
+        )}
+        {view === "auth" && (
+          <Auth
+            role={role}
+            onRoleChange={setRole}
+            onBack={() => setView("welcome")}
+            onLoginSuccess={() => setView("farmer-dashboard")}
+          />
+        )}
+        {view === "farmer-dashboard" && (
+          <FarmerDashboard onLogout={() => setView("welcome")} />
         )}
       </main>
     </div>

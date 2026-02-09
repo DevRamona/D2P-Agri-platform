@@ -5,15 +5,20 @@ interface AuthProps {
   role: UserRole;
   onRoleChange: (role: UserRole) => void;
   onBack: () => void;
+  onLoginSuccess: () => void;
 }
 
 type AuthTab = "login" | "register";
 
-const Auth = ({ role, onRoleChange, onBack }: AuthProps) => {
+const Auth = ({ role, onRoleChange, onBack, onLoginSuccess }: AuthProps) => {
   const [tab, setTab] = useState<AuthTab>("login");
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (tab === "login" && role === "farmer") {
+      onLoginSuccess();
+    }
   };
 
   return (
