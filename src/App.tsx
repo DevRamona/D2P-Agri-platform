@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Auth from "./components/Auth";
 import FarmerDashboard from "./components/FarmerDashboard";
 import ProduceInventory from "./components/ProduceInventory";
+import QualityScan from "./components/QualityScan";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -69,6 +70,9 @@ const App = () => {
         )}
         {view === "inventory" && (
           <ProduceInventory onNavigate={setView} />
+        )}
+        {view === "quality-scan" && (
+          <QualityScan onNavigate={setView} />
         )}
       </main>
     </div>

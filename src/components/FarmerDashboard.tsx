@@ -74,7 +74,11 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
         <h3 className="m-0 text-sm font-semibold tracking-[2px] text-[var(--muted)]">Quick Actions</h3>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <button className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
+        <button
+          className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
+          type="button"
+          onClick={() => onNavigate?.("quality-scan")}
+        >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-2)]">
             <svg className="h-5 w-5 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M4 7h16v10H4z" />
