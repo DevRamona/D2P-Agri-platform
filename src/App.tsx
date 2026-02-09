@@ -7,6 +7,11 @@ import AIDiagnosis from "./components/AIDiagnosis";
 import BatchCreation from "./components/BatchCreation";
 import BatchTracker from "./components/BatchTracker";
 import Wallet from "./components/Wallet";
+import BuyerMarketplace from "./components/BuyerMarketplace";
+import BuyerBatchDetails from "./components/BuyerBatchDetails";
+import OrderReview from "./components/OrderReview";
+import OrderTracking from "./components/OrderTracking";
+import BuyerOrderHistory from "./components/BuyerOrderHistory";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -66,7 +71,9 @@ const App = () => {
             role={role}
             onRoleChange={setRole}
             onBack={() => setView("welcome")}
-            onLoginSuccess={() => setView("farmer-dashboard")}
+            onLoginSuccess={(nextRole) =>
+              setView(nextRole === "farmer" ? "farmer-dashboard" : "buyer-marketplace")
+            }
           />
         )}
         {view === "farmer-dashboard" && (
@@ -89,6 +96,21 @@ const App = () => {
         )}
         {view === "wallet" && (
           <Wallet onNavigate={setView} />
+        )}
+        {view === "buyer-marketplace" && (
+          <BuyerMarketplace onNavigate={setView} />
+        )}
+        {view === "buyer-batch-details" && (
+          <BuyerBatchDetails onNavigate={setView} />
+        )}
+        {view === "order-review" && (
+          <OrderReview onNavigate={setView} />
+        )}
+        {view === "order-tracking" && (
+          <OrderTracking onNavigate={setView} />
+        )}
+        {view === "buyer-order-history" && (
+          <BuyerOrderHistory onNavigate={setView} />
         )}
       </main>
     </div>

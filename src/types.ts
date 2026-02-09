@@ -9,6 +9,11 @@ export type ViewMode =
   | "ai-diagnosis"
   | "batch-creation"
   | "batch-tracker"
-  | "wallet";
+  | "wallet"
+  | "buyer-marketplace"
+  | "buyer-batch-details"
+  | "order-review"
+  | "order-tracking"
+  | "buyer-order-history";
 
 export type ThemeMode = "light" | "dark";
