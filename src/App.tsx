@@ -10,6 +10,7 @@ import Wallet from "./components/Wallet";
 import BuyerMarketplace from "./components/BuyerMarketplace";
 import BuyerBatchDetails from "./components/BuyerBatchDetails";
 import OrderReview from "./components/OrderReview";
+import OrderTracking from "./components/OrderTracking";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -103,6 +104,9 @@ const App = () => {
         )}
         {view === "order-review" && (
           <OrderReview onNavigate={setView} />
+        )}
+        {view === "order-tracking" && (
+          <OrderTracking onNavigate={setView} />
         )}
       </main>
     </div>

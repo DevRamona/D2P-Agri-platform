@@ -12,6 +12,7 @@ export type ViewMode =
   | "wallet"
   | "buyer-marketplace"
   | "buyer-batch-details"
-  | "order-review";
+  | "order-review"
+  | "order-tracking";
 
 export type ThemeMode = "light" | "dark";

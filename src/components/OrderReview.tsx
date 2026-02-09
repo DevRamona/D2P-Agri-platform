@@ -158,7 +158,11 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
         By clicking Confirm, you agree to the Escrow Protection terms and conditions for agricultural commerce in Rwanda.
       </p>
 
-      <button className="w-full rounded-[18px] bg-[var(--accent)] px-4 py-4 text-base font-semibold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.35)]">
+      <button
+        className="w-full rounded-[18px] bg-[var(--accent)] px-4 py-4 text-base font-semibold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.35)]"
+        type="button"
+        onClick={() => onNavigate?.("order-tracking")}
+      >
         Confirm &amp; Pay 305,000 RWF
       </button>
     </section>
