@@ -100,6 +100,7 @@ const QualityScan = ({ onNavigate }: QualityScanProps) => {
             type="button"
             className="relative grid h-20 w-20 place-items-center rounded-full bg-white/90"
             aria-label="Capture"
+            onClick={() => onNavigate?.("ai-diagnosis")}
           >
             <span className="absolute inset-1 rounded-full border-[6px] border-[var(--accent)]" />
             <span className="grid h-10 w-10 place-items-center rounded-full bg-white">

@@ -3,6 +3,7 @@ import Auth from "./components/Auth";
 import FarmerDashboard from "./components/FarmerDashboard";
 import ProduceInventory from "./components/ProduceInventory";
 import QualityScan from "./components/QualityScan";
+import AIDiagnosis from "./components/AIDiagnosis";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -73,6 +74,9 @@ const App = () => {
         )}
         {view === "quality-scan" && (
           <QualityScan onNavigate={setView} />
+        )}
+        {view === "ai-diagnosis" && (
+          <AIDiagnosis onNavigate={setView} />
         )}
       </main>
     </div>
