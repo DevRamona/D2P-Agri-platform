@@ -7,6 +7,7 @@ import AIDiagnosis from "./components/AIDiagnosis";
 import BatchCreation from "./components/BatchCreation";
 import BatchTracker from "./components/BatchTracker";
 import Wallet from "./components/Wallet";
+import BuyerMarketplace from "./components/BuyerMarketplace";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -66,7 +67,9 @@ const App = () => {
             role={role}
             onRoleChange={setRole}
             onBack={() => setView("welcome")}
-            onLoginSuccess={() => setView("farmer-dashboard")}
+            onLoginSuccess={(nextRole) =>
+              setView(nextRole === "farmer" ? "farmer-dashboard" : "buyer-marketplace")
+            }
           />
         )}
         {view === "farmer-dashboard" && (
@@ -89,6 +92,9 @@ const App = () => {
         )}
         {view === "wallet" && (
           <Wallet onNavigate={setView} />
+        )}
+        {view === "buyer-marketplace" && (
+          <BuyerMarketplace onNavigate={setView} />
         )}
       </main>
     </div>

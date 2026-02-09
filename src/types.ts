@@ -9,6 +9,7 @@ export type ViewMode =
   | "ai-diagnosis"
   | "batch-creation"
   | "batch-tracker"
-  | "wallet";
+  | "wallet"
+  | "buyer-marketplace";
 
 export type ThemeMode = "light" | "dark";
