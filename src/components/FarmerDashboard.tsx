@@ -140,7 +140,12 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
+        <button
+          type="button"
+          onClick={() => onNavigate?.("batch-tracker")}
+          className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left"
+          aria-label="Open batch tracker for Arabica batch"
+        >
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-[14px] bg-[var(--surface-2)] grid place-items-center">
               <svg
@@ -175,7 +180,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
             <span className="text-[var(--accent)]">Milling</span>
             <span>Sale</span>
           </div>
-        </div>
+        </button>
 
         <div className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
           <div className="flex items-center gap-3">

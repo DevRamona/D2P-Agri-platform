@@ -7,6 +7,7 @@ export type ViewMode =
   | "inventory"
   | "quality-scan"
   | "ai-diagnosis"
-  | "batch-creation";
+  | "batch-creation"
+  | "batch-tracker";
 
 export type ThemeMode = "light" | "dark";

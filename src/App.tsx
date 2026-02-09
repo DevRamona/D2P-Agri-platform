@@ -5,6 +5,7 @@ import ProduceInventory from "./components/ProduceInventory";
 import QualityScan from "./components/QualityScan";
 import AIDiagnosis from "./components/AIDiagnosis";
 import BatchCreation from "./components/BatchCreation";
+import BatchTracker from "./components/BatchTracker";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -81,6 +82,9 @@ const App = () => {
         )}
         {view === "batch-creation" && (
           <BatchCreation onNavigate={setView} />
+        )}
+        {view === "batch-tracker" && (
+          <BatchTracker onNavigate={setView} />
         )}
       </main>
     </div>
