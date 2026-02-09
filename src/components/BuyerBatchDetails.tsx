@@ -159,7 +159,11 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
         <button className="flex-1 rounded-[16px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold">
           Contact
         </button>
-        <button className="flex-[2] rounded-[16px] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.3)]">
+        <button
+          className="flex-[2] rounded-[16px] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.3)]"
+          type="button"
+          onClick={() => onNavigate?.("order-review")}
+        >
           Add 1.2 Tons to Order
         </button>
       </div>
