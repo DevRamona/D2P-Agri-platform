@@ -4,6 +4,7 @@ import FarmerDashboard from "./components/FarmerDashboard";
 import ProduceInventory from "./components/ProduceInventory";
 import QualityScan from "./components/QualityScan";
 import AIDiagnosis from "./components/AIDiagnosis";
+import BatchCreation from "./components/BatchCreation";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -77,6 +78,9 @@ const App = () => {
         )}
         {view === "ai-diagnosis" && (
           <AIDiagnosis onNavigate={setView} />
+        )}
+        {view === "batch-creation" && (
+          <BatchCreation onNavigate={setView} />
         )}
       </main>
     </div>

@@ -6,6 +6,7 @@ export type ViewMode =
   | "farmer-dashboard"
   | "inventory"
   | "quality-scan"
-  | "ai-diagnosis";
+  | "ai-diagnosis"
+  | "batch-creation";
 
 export type ThemeMode = "light" | "dark";

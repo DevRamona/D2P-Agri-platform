@@ -88,7 +88,11 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
           <p className="mt-4 mb-1 text-sm font-semibold">Scan Crop</p>
           <p className="m-0 text-xs text-[var(--muted)]">Instant crop health check</p>
         </button>
-        <button className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
+        <button
+          className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
+          type="button"
+          onClick={() => onNavigate?.("batch-creation")}
+        >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-2)]">
             <svg className="h-5 w-5 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M12 5v14" />
