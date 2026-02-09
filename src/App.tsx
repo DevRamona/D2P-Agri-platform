@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Auth from "./components/Auth";
 import FarmerDashboard from "./components/FarmerDashboard";
+import ProduceInventory from "./components/ProduceInventory";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -64,7 +65,10 @@ const App = () => {
           />
         )}
         {view === "farmer-dashboard" && (
-          <FarmerDashboard onLogout={() => setView("welcome")} />
+          <FarmerDashboard onLogout={() => setView("welcome")} onNavigate={setView} />
+        )}
+        {view === "inventory" && (
+          <ProduceInventory onNavigate={setView} />
         )}
       </main>
     </div>

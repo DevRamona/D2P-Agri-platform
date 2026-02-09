@@ -1,8 +1,11 @@
-﻿interface FarmerDashboardProps {
+﻿import type { ViewMode } from "../types";
+
+interface FarmerDashboardProps {
   onLogout?: () => void;
+  onNavigate?: (view: ViewMode) => void;
 }
 
-const FarmerDashboard = ({ onLogout }: FarmerDashboardProps) => {
+const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
   return (
     <section className="w-full max-w-[680px] flex flex-col gap-6 animate-[rise_0.6s_ease_both]">
       <header className="flex items-center justify-between">
@@ -206,6 +209,7 @@ const FarmerDashboard = ({ onLogout }: FarmerDashboardProps) => {
           {
             label: "Home",
             active: true,
+            target: "farmer-dashboard" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M3 11l9-7 9 7" />
@@ -214,8 +218,9 @@ const FarmerDashboard = ({ onLogout }: FarmerDashboardProps) => {
             ),
           },
           {
-            label: "Batches",
+            label: "Inventory",
             active: false,
+            target: "inventory" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M3 7h18v12H3z" />
@@ -250,6 +255,7 @@ const FarmerDashboard = ({ onLogout }: FarmerDashboardProps) => {
           <button
             key={item.label}
             type="button"
+            onClick={() => item.target && onNavigate?.(item.target)}
             className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${
               item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
             }`}
@@ -266,4 +272,3 @@ const FarmerDashboard = ({ onLogout }: FarmerDashboardProps) => {
 };
 
 export default FarmerDashboard;
-
