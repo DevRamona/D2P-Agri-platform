@@ -11,6 +11,7 @@ import BuyerMarketplace from "./components/BuyerMarketplace";
 import BuyerBatchDetails from "./components/BuyerBatchDetails";
 import OrderReview from "./components/OrderReview";
 import OrderTracking from "./components/OrderTracking";
+import BuyerOrderHistory from "./components/BuyerOrderHistory";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -107,6 +108,9 @@ const App = () => {
         )}
         {view === "order-tracking" && (
           <OrderTracking onNavigate={setView} />
+        )}
+        {view === "buyer-order-history" && (
+          <BuyerOrderHistory onNavigate={setView} />
         )}
       </main>
     </div>

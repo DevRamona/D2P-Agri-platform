@@ -197,13 +197,14 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
       <nav className="mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Discover", active: true },
-          { label: "Orders", active: false },
+          { label: "Orders", active: false, target: "buyer-order-history" as const },
           { label: "Bids", active: false },
           { label: "Profile", active: false },
         ].map((item) => (
           <button
             key={item.label}
             type="button"
+            onClick={() => item.target && onNavigate?.(item.target)}
             className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${
               item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
             }`}

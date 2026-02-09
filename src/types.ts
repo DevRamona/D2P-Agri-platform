@@ -13,6 +13,7 @@ export type ViewMode =
   | "buyer-marketplace"
   | "buyer-batch-details"
   | "order-review"
-  | "order-tracking";
+  | "order-tracking"
+  | "buyer-order-history";
 
 export type ThemeMode = "light" | "dark";
