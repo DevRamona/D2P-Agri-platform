@@ -169,7 +169,11 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
                   <p className="m-0 text-[10px] uppercase tracking-[2px] text-[var(--muted)]">Total Value</p>
                   <p className="mt-1 text-sm font-semibold">{batch.total} RWF</p>
                 </div>
-                <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[#0b1307]">
+                <button
+                  className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[#0b1307]"
+                  type="button"
+                  onClick={() => onNavigate?.("buyer-batch-details")}
+                >
                   View Details
                 </button>
               </div>

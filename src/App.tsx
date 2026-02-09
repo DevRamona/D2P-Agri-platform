@@ -8,6 +8,7 @@ import BatchCreation from "./components/BatchCreation";
 import BatchTracker from "./components/BatchTracker";
 import Wallet from "./components/Wallet";
 import BuyerMarketplace from "./components/BuyerMarketplace";
+import BuyerBatchDetails from "./components/BuyerBatchDetails";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole, ViewMode } from "./types";
 
@@ -95,6 +96,9 @@ const App = () => {
         )}
         {view === "buyer-marketplace" && (
           <BuyerMarketplace onNavigate={setView} />
+        )}
+        {view === "buyer-batch-details" && (
+          <BuyerBatchDetails onNavigate={setView} />
         )}
       </main>
     </div>

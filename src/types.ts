@@ -10,6 +10,7 @@ export type ViewMode =
   | "batch-creation"
   | "batch-tracker"
   | "wallet"
-  | "buyer-marketplace";
+  | "buyer-marketplace"
+  | "buyer-batch-details";
 
 export type ThemeMode = "light" | "dark";
