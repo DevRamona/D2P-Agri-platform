@@ -52,7 +52,11 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
           <span className="text-sm font-semibold text-[var(--muted)]">RWF</span>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button className="flex items-center justify-center gap-2 rounded-[14px] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0b1307]">
+          <button
+            className="flex items-center justify-center gap-2 rounded-[14px] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0b1307]"
+            type="button"
+            onClick={() => onNavigate?.("wallet")}
+          >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <rect x="3" y="6" width="18" height="12" rx="3" />
               <path d="M7 12h4" />

@@ -8,6 +8,7 @@ export type ViewMode =
   | "quality-scan"
   | "ai-diagnosis"
   | "batch-creation"
-  | "batch-tracker";
+  | "batch-tracker"
+  | "wallet";
 
 export type ThemeMode = "light" | "dark";
