@@ -3,7 +3,7 @@ import type { UserRole } from "../types";
 interface WelcomeProps {
   role: UserRole;
   onRoleChange: (role: UserRole) => void;
-  onGetStarted: () => void;
+  onGetStarted: (tab: "login" | "register") => void;
 }
 
 const Welcome = ({ role, onRoleChange, onGetStarted }: WelcomeProps) => {
@@ -31,7 +31,7 @@ const Welcome = ({ role, onRoleChange, onGetStarted }: WelcomeProps) => {
             id="welcome-title"
             className="font-display text-[clamp(22px,3vw,32px)] font-bold leading-tight m-0"
           >
-            D2P Agriculture
+            IsokoLink
           </h1>
           <p className="mt-2 text-[15px] leading-relaxed text-[var(--muted)]">
             Smart farming and secure trading for Rwanda's maize and bean farmers.
@@ -87,14 +87,27 @@ const Welcome = ({ role, onRoleChange, onGetStarted }: WelcomeProps) => {
         </button>
       </div>
 
-      <button
-        className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--accent)] px-5 py-3.5 text-base font-bold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.3)]"
-        type="button"
-        onClick={onGetStarted}
-      >
-        Get Started
-        <span aria-hidden="true">→</span>
-      </button>
+      <div className="flex flex-col gap-3">
+        <button
+          className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--accent)] px-5 py-3.5 text-base font-bold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.3)] transition-transform active:scale-[0.98]"
+          type="button"
+          onClick={() => onGetStarted("register")}
+        >
+          Create Account
+          <span aria-hidden="true">→</span>
+        </button>
+
+        <p className="m-0 text-center text-sm font-semibold text-[var(--muted)]">
+          Already have an account?{" "}
+          <button
+            type="button"
+            className="text-[var(--accent)] hover:underline"
+            onClick={() => onGetStarted("login")}
+          >
+            Log in
+          </button>
+        </p>
+      </div>
 
       <p className="m-0 text-center text-xs leading-relaxed text-[var(--muted)]">
         By continuing, you agree to our <span className="font-semibold text-[var(--accent)]">Terms of Service</span> and
