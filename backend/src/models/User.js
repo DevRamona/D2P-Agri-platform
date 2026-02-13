@@ -3,7 +3,8 @@
 const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
-    phoneNumber: { type: String, required: true, unique: true, trim: true },
+    phoneNumber: { type: String, unique: true, sparse: true, trim: true },
+    email: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["FARMER", "BUYER"], required: true },
   },

@@ -4,13 +4,17 @@ const roleEnum = z.enum(["FARMER", "BUYER"]);
 
 const registerSchema = z.object({
   fullName: z.string().min(2),
-  phoneNumber: z.string().min(7),
-  password: z.string().min(6),
+  phoneNumber: z.string().min(7).optional(),
+  email: z.string().email("Invalid email address").optional(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
   role: roleEnum,
+}).refine(data => data.phoneNumber || data.email, {
+  message: "Either phone number or email is required",
+  path: ["phoneNumber"],
 });
 
 const loginSchema = z.object({
-  phoneNumber: z.string().min(7),
+  identifier: z.string().min(3), // Can be phone or email
   password: z.string().min(6),
 });
 

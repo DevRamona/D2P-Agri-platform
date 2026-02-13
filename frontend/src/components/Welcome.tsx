@@ -1,16 +1,10 @@
-import type { UserRole } from "../types";
+
 
 interface WelcomeProps {
-  role: UserRole;
-  onRoleChange: (role: UserRole) => void;
   onGetStarted: (tab: "login" | "register") => void;
 }
 
-const Welcome = ({ role, onRoleChange, onGetStarted }: WelcomeProps) => {
-  const baseRoleCard =
-    "flex flex-col items-center gap-3 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-5 text-[var(--text)] font-semibold transition duration-200";
-  const activeRoleCard = "border-[var(--accent)] shadow-[0_12px_28px_rgba(73,197,26,0.25)] -translate-y-0.5";
-
+const Welcome = ({ onGetStarted }: WelcomeProps) => {
   return (
     <section
       className="w-full max-w-[520px] lg:max-w-[600px] flex flex-col gap-5 animate-[rise_0.6s_ease_both]"
@@ -51,41 +45,6 @@ const Welcome = ({ role, onRoleChange, onGetStarted }: WelcomeProps) => {
           aria-hidden="true"
         />
       </figure>
-
-      <p className="m-0 text-[12px] uppercase tracking-[4px] text-[var(--muted)]">I am a...</p>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" role="radiogroup" aria-label="Choose your role">
-        <button
-          type="button"
-          className={`${baseRoleCard} ${role === "farmer" ? activeRoleCard : ""}`}
-          role="radio"
-          aria-checked={role === "farmer"}
-          onClick={() => onRoleChange("farmer")}
-        >
-          <span className="grid h-12 w-12 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]">
-            <svg viewBox="0 0 48 48" className={`h-7 w-7 ${role === "farmer" ? "fill-[var(--accent)]" : "fill-[var(--muted)]"}`}>
-              <path d="M24 10c5.523 0 10 4.477 10 10 0 7.5-6 12-10 18-4-6-10-10.5-10-18 0-5.523 4.477-10 10-10z" />
-              <path d="M22 20h4v10h-4z" />
-              <path d="M18 24h12v4H18z" />
-            </svg>
-          </span>
-          <span>Farmer</span>
-        </button>
-        <button
-          type="button"
-          className={`${baseRoleCard} ${role === "buyer" ? activeRoleCard : ""}`}
-          role="radio"
-          aria-checked={role === "buyer"}
-          onClick={() => onRoleChange("buyer")}
-        >
-          <span className="grid h-12 w-12 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]">
-            <svg viewBox="0 0 48 48" className={`h-7 w-7 ${role === "buyer" ? "fill-[var(--accent)]" : "fill-[var(--muted)]"}`}>
-              <path d="M14 16h20l-2 20H16L14 16z" />
-              <path d="M18 16c0-4 3-6 6-6s6 2 6 6" />
-            </svg>
-          </span>
-          <span>Buyer</span>
-        </button>
-      </div>
 
       <div className="flex flex-col gap-3">
         <button

@@ -16,20 +16,35 @@ const parseExpiry = (value) => {
 };
 
 class AuthService {
-  async register({ fullName, phoneNumber, password, role }) {
-    const existing = await User.findOne({ phoneNumber });
+  async register({ fullName, phoneNumber, email, password, role }) {
+    const existing = await User.findOne({
+      $or: [
+        { phoneNumber: phoneNumber || "" },
+        { email: email || "" }
+      ]
+    });
+
     if (existing) {
-      throw { code: "CONFLICT", message: "Phone number already in use" };
+      if (phoneNumber && existing.phoneNumber === phoneNumber) {
+        throw { code: "CONFLICT", message: "Phone number already in use" };
+      }
+      if (email && existing.email === email) {
+        throw { code: "CONFLICT", message: "Email already in use" };
+      }
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ fullName, phoneNumber, passwordHash, role });
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({ fullName, phoneNumber, email, passwordHash, role });
 
     return { user };
   }
 
-  async login({ phoneNumber, password }) {
-    const user = await User.findOne({ phoneNumber });
+  async login({ identifier, password }) {
+    // Check if identifier looks like an email or phone
+    const isEmail = identifier.includes("@");
+    const query = isEmail ? { email: identifier } : { phoneNumber: identifier };
+
+    const user = await User.findOne(query);
     if (!user) {
       throw { code: "UNAUTHORIZED", message: "Invalid credentials" };
     }

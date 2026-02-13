@@ -17,7 +17,9 @@ const register = async (req, res) => {
   }
 
   try {
+    console.log("Registering user:", parsed.data.phoneNumber || parsed.data.email);
     const { user } = await authService.register(parsed.data);
+    console.log("User registered:", user.id);
     return res.status(201).json(success({ user: toUserDto(user) }));
   } catch (error) {
     if (error.code === "CONFLICT") {
