@@ -1,9 +1,31 @@
 import { apiFetch } from "./client";
 
+import { apiFetch } from "./client";
+
+export type Product = {
+    _id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    pricePerUnit: number;
+    image: string;
+    status: string;
+    dateAdded: string;
+};
+
+export type Batch = {
+    _id: string;
+    products: { product: string | Product; quantity: number }[];
+    totalWeight: number;
+    totalPrice: number;
+    status: string;
+    createdAt: string;
+};
+
 export type DashboardData = {
     totalEarnings: number;
     earningsChange: string | null;
-    activeBatches: any[]; // Define stronger type later
+    activeBatches: Batch[];
     marketPrices: {
         crop: string;
         price: string;
@@ -16,3 +38,18 @@ export type DashboardData = {
 
 export const getDashboard = () =>
     apiFetch<{ data: DashboardData }>("/farmer/dashboard");
+
+export const getInventory = () =>
+    apiFetch<{ data: Product[] }>("/farmer/inventory");
+
+export const addProduct = (data: Partial<Product>) =>
+    apiFetch<{ data: Product }>("/farmer/inventory", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+
+export const createBatch = (data: Partial<Batch>) =>
+    apiFetch<{ data: Batch }>("/farmer/batch", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });

@@ -192,8 +192,33 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
           </div>
         )}
 
-        {data?.activeBatches.map((batch: any) => (
-          <div key={batch.id}>Batch</div>
+        {data?.activeBatches.map((batch) => (
+          <div key={batch._id} className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4 shadow-sm">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="m-0 text-sm font-semibold">Active Batch</h4>
+                  <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] uppercase text-[var(--accent)]">
+                    {batch.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {new Date(batch.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="m-0 text-lg font-bold">{(batch.totalPrice || 0).toLocaleString()} <span className="text-xs font-normal text-[var(--muted)]">RWF</span></p>
+                <p className="m-0 text-xs text-[var(--muted)]">{(batch.totalWeight || 0).toLocaleString()} kg</p>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {batch.products?.map((p: any, idx: number) => (
+                <span key={idx} className="whitespace-nowrap rounded-[8px] bg-[var(--surface-2)] px-2 py-1 text-[10px] text-[var(--muted)]">
+                  {p.product?.name || "Unknown"} ({p.quantity} kg)
+                </span>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
