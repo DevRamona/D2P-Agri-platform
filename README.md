@@ -15,6 +15,9 @@ IsokoLink is a digital platform designed to connect farmers and buyers in Rwanda
 *   MongoDB (Mongoose)
 *   JWT Authentication
 
+## Video Demo 
+https://youtu.be/n9w4BRJTfJc
+
 ## Prerequisites
 
 *   Node.js (v16 or higher)
