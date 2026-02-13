@@ -1,4 +1,8 @@
-﻿import type { ViewMode } from "../types";
+﻿import { useEffect, useState } from "react";
+import type { ViewMode } from "../types";
+import { getStoredUser } from "../utils/authStorage";
+import type { ApiUser } from "../api/auth";
+import { getDashboard, type DashboardData } from "../api/farmer";
 
 interface FarmerDashboardProps {
   onLogout?: () => void;
@@ -6,19 +10,55 @@ interface FarmerDashboardProps {
 }
 
 const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
+  const user = getStoredUser() as ApiUser | null;
+  const fullName = user?.fullName || "Farmer";
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const result = await getDashboard();
+        setData(result as unknown as DashboardData);
+      } catch (err) {
+        console.error("Failed to load dashboard", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-[680px] h-screen grid place-items-center text-[var(--muted)]">
+        <p className="animate-pulse">Loading dashboard...</p>
+      </div>
+    );
+  }
+
   return (
     <section className="w-full max-w-[680px] flex flex-col gap-6 animate-[rise_0.6s_ease_both]">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="h-12 w-12 rounded-full bg-[var(--surface-2)] border border-[var(--stroke)] grid place-items-center">
-              <span className="font-bold text-sm text-[var(--accent)]">MA</span>
+              <span className="font-bold text-sm text-[var(--accent)]">{getInitials(fullName)}</span>
             </div>
             <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-[var(--bg)] bg-[var(--accent)]" />
           </div>
           <div>
             <p className="m-0 text-sm text-[var(--accent)]">Muraho!</p>
-            <p className="m-0 text-lg font-semibold">Mutesi Aline</p>
+            <p className="m-0 text-lg font-semibold">{fullName}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -43,12 +83,14 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
       <div className="rounded-[24px] border border-[var(--stroke)] bg-[linear-gradient(135deg,rgba(73,197,26,0.12),transparent)] p-5 shadow-[var(--shadow)]">
         <div className="flex items-center justify-between gap-3">
           <p className="m-0 text-sm font-semibold text-[var(--muted)]">Total Earnings</p>
-          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-            +12% vs last month
-          </span>
+          {data?.earningsChange && (
+            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+              {data.earningsChange}
+            </span>
+          )}
         </div>
         <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-3xl font-bold">450,000</span>
+          <span className="text-3xl font-bold">{data?.totalEarnings?.toLocaleString() ?? 0}</span>
           <span className="text-sm font-semibold text-[var(--muted)]">RWF</span>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
@@ -115,11 +157,10 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
         </span>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-1">
-        {[
-          { crop: "Arabica Coffee", price: "2,400", unit: "/kg", change: "+2.4%", positive: true },
-          { crop: "Maize", price: "650", unit: "/kg", change: "-0.8%", positive: false },
-          { crop: "Dry Beans", price: "900", unit: "/kg", change: "+1.1%", positive: true },
-        ].map((item) => (
+        {(!data?.marketPrices || data.marketPrices.length === 0) && (
+          <p className="text-sm text-[var(--muted)] p-2">Loading prices...</p>
+        )}
+        {data?.marketPrices.map((item) => (
           <div
             key={item.crop}
             className="min-w-[180px] rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] p-4"
@@ -144,82 +185,21 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
       </div>
 
       <div className="flex flex-col gap-4">
-        <button
-          type="button"
-          onClick={() => onNavigate?.("batch-tracker")}
-          className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left"
-          aria-label="Open batch tracker for Arabica batch"
-        >
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-[14px] bg-[var(--surface-2)] grid place-items-center">
-              <svg
-                className="h-6 w-6 text-[var(--accent)]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4 14c7 0 10-7 16-7 0 8-5 11-10 11-3 0-4-2-6-4z" />
-                <path d="M9 15c1-3 4-5 8-6" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="m-0 text-xs font-semibold text-[var(--accent)]">Processing</p>
-              <p className="m-0 text-sm font-semibold">Batch #402 - Arabica</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Last update: 2 hours ago</p>
-            </div>
-            <div className="text-right">
-              <p className="m-0 text-sm font-semibold">850 kg</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Estimate</p>
-            </div>
+        {(!data?.activeBatches || data.activeBatches.length === 0) && (
+          <div className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface-2)] p-6 text-center">
+            <p className="text-sm text-[var(--muted)]">No active batches found.</p>
+            <button onClick={() => onNavigate?.("batch-creation")} className="mt-2 text-xs font-semibold text-[var(--accent)]">Create your first batch →</button>
           </div>
-          <div className="mt-4 h-2 w-full rounded-full bg-[var(--surface-2)]">
-            <div className="h-2 w-[70%] rounded-full bg-[var(--accent)]" />
-          </div>
-          <div className="mt-2 flex justify-between text-[10px] font-semibold text-[var(--muted)]">
-            <span>Washing</span>
-            <span>Drying</span>
-            <span className="text-[var(--accent)]">Milling</span>
-            <span>Sale</span>
-          </div>
-        </button>
+        )}
 
-        <div className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-[14px] bg-[var(--surface-2)] grid place-items-center">
-              <svg
-                className="h-6 w-6 text-amber-300"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M7 7h10v10H7z" />
-                <path d="M7 11h10" />
-                <path d="M10 7v10" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="m-0 text-xs font-semibold text-amber-300">In Transit</p>
-              <p className="m-0 text-sm font-semibold">Batch #398 - Maize Bulk</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Headed to Kigali Processor</p>
-            </div>
-            <div className="text-right">
-              <p className="m-0 text-sm font-semibold">1.2 t</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Confirmed</p>
-            </div>
-          </div>
-          <div className="mt-4 h-2 w-full rounded-full bg-[var(--surface-2)]">
-            <div className="h-2 w-[45%] rounded-full bg-amber-300" />
-          </div>
-        </div>
+        {data?.activeBatches.map((batch: any) => (
+          <div key={batch.id}>Batch</div>
+        ))}
       </div>
 
-      <p className="m-0 text-center text-xs text-[var(--muted)]">Last synced: Today, 08:45 AM</p>
+      <p className="m-0 text-center text-xs text-[var(--muted)]">
+        Last synced: {data?.lastSynced ? new Date(data.lastSynced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+      </p>
 
       <nav className="mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
@@ -273,9 +253,8 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
             key={item.label}
             type="button"
             onClick={() => item.target && onNavigate?.(item.target)}
-            className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${
-              item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
-            }`}
+            className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
+              }`}
           >
             <span className="grid h-8 w-8 place-items-center rounded-[12px] bg-[var(--surface)]">
               {item.icon}

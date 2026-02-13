@@ -94,7 +94,7 @@ const App = () => {
   };
 
   const handleNavigateToAuth = (tab: "login" | "register") => {
-    navigate(`/auth/${tab}`, { state: { role } });
+    navigate(`/auth/${tab}`);
   };
 
   if (isRestoring) {
@@ -124,13 +124,12 @@ const App = () => {
         <Routes>
           <Route
             path="/"
-            element={<Welcome role={role} onRoleChange={setRole} onGetStarted={handleNavigateToAuth} />}
+            element={<Welcome onGetStarted={handleNavigateToAuth} />}
           />
           <Route
             path="/auth/login"
             element={
               <Auth
-                role={role}
                 initialTab="login"
                 onBack={() => navigate("/")}
                 onLoginSuccess={handleLoginSuccess}
@@ -141,7 +140,6 @@ const App = () => {
             path="/auth/register"
             element={
               <Auth
-                role={role}
                 initialTab="register"
                 onBack={() => navigate("/")}
                 onLoginSuccess={handleLoginSuccess}

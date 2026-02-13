@@ -22,7 +22,8 @@ export const fromApiRole = (role: ApiRole): UserRole => (role === "FARMER" ? "fa
 
 export const register = (payload: {
   fullName: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  email?: string;
   password: string;
   role: UserRole;
 }) =>
@@ -31,12 +32,13 @@ export const register = (payload: {
     body: JSON.stringify({
       fullName: payload.fullName,
       phoneNumber: payload.phoneNumber,
+      email: payload.email,
       password: payload.password,
       role: toApiRole(payload.role),
     }),
   });
 
-export const login = (payload: { phoneNumber: string; password: string }) =>
+export const login = (payload: { identifier: string; password: string }) =>
   apiFetch<AuthResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),

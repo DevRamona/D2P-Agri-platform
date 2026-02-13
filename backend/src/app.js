@@ -9,6 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", authRoutes);
+app.use("/farmer", require("./routes/farmerRoutes"));
 
 app.use(errorHandler);
 
