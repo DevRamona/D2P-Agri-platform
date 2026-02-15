@@ -1,11 +1,27 @@
+
+
 const { success, failure } = require("../utils/response");
+const Product = require("../models/Product");
+const Batch = require("../models/Batch");
 
 const getDashboard = async (req, res) => {
     try {
-        // In a real app, you would fetch these from the database based on req.user.id
-        // For now, we return empty/default values as requested to remove hardcoded frontend data.
+        const userId = req.user._id;
 
-        // innovative: return real-time market prices if possible, otherwise static
+        // Fetch active batches
+        const activeBatches = await Batch.find({ farmer: userId, status: 'active' })
+            .populate('products.product', 'name unit')
+            .sort({ createdAt: -1 });
+
+        // Calculate total earnings from sold batches
+        const soldBatches = await Batch.find({ farmer: userId, status: 'sold' });
+        const totalEarnings = soldBatches.reduce((sum, batch) => sum + batch.totalPrice, 0);
+
+        // Calculate earnings change (mock logic for now, or compare with last month)
+        // For simplicity, we'll keep the static string or implement basic logic later
+        const earningsChange = "+0% vs last month";
+
+        // Mock market prices (could be fetched from an external API or another collection)
         const marketPrices = [
             { crop: "Arabica Coffee", price: "2,400", unit: "/kg", change: "+2.4%", positive: true },
             { crop: "Maize", price: "650", unit: "/kg", change: "-0.8%", positive: false },
@@ -13,9 +29,9 @@ const getDashboard = async (req, res) => {
         ];
 
         const dashboardData = {
-            totalEarnings: 0,
-            earningsChange: "+0% vs last month",
-            activeBatches: [], // No batches yet for new user
+            totalEarnings,
+            earningsChange,
+            activeBatches,
             marketPrices,
             lastSynced: new Date().toISOString(),
         };
@@ -27,6 +43,60 @@ const getDashboard = async (req, res) => {
     }
 };
 
+const getInventory = async (req, res) => {
+    try {
+        const products = await Product.find({ farmer: req.user._id }).sort({ dateAdded: -1 });
+        return res.status(200).json(success(products));
+    } catch (error) {
+        console.error("Get inventory error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
+const addProduct = async (req, res) => {
+    try {
+        const { name, quantity, unit, pricePerUnit, image } = req.body;
+
+        const newProduct = new Product({
+            farmer: req.user._id,
+            name,
+            quantity,
+            unit,
+            pricePerUnit,
+            image
+        });
+
+        await newProduct.save();
+        return res.status(201).json(success(newProduct));
+    } catch (error) {
+        console.error("Add product error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
+const createBatch = async (req, res) => {
+    try {
+        const { products, totalWeight, totalPrice, destination } = req.body;
+
+        const newBatch = new Batch({
+            farmer: req.user._id,
+            products,
+            totalWeight,
+            totalPrice,
+            destination
+        });
+
+        await newBatch.save();
+        return res.status(201).json(success(newBatch));
+    } catch (error) {
+        console.error("Create batch error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
 module.exports = {
     getDashboard,
+    getInventory,
+    addProduct,
+    createBatch,
 };

@@ -1,53 +1,61 @@
-﻿import type { ViewMode } from "../types";
+﻿import { useEffect, useState } from "react";
+import type { ViewMode } from "../types";
+import { getInventory, addProduct, type Product } from "../api/farmer";
 
 interface ProduceInventoryProps {
   onNavigate?: (view: ViewMode) => void;
 }
 
-const stockItems = [
-  {
-    name: "Maize",
-    stored: "Oct 12, 2023",
-    quantity: "450",
-    unit: "kg",
-    status: "In storage",
-    statusClass: "bg-[var(--accent-soft)] text-[var(--accent)]",
-    image:
-      "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?auto=format&fit=crop&w=400&q=80",
-  },
-  {
-    name: "Beans",
-    stored: "Sep 28, 2023",
-    quantity: "320",
-    unit: "kg",
-    status: "In storage",
-    statusClass: "bg-[var(--accent-soft)] text-[var(--accent)]",
-    image:
-      "https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?auto=format&fit=crop&w=400&q=80",
-  },
-  {
-    name: "Irish Potatoes",
-    stored: "Oct 05, 2023",
-    quantity: "280",
-    unit: "kg",
-    status: "Selling fast",
-    statusClass: "bg-amber-500/20 text-amber-300",
-    image:
-      "https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=400&q=80",
-  },
-  {
-    name: "Rice",
-    stored: "Sep 15, 2023",
-    quantity: "200",
-    unit: "kg",
-    status: "Low stock",
-    statusClass: "bg-[var(--surface-2)] text-[var(--muted)]",
-    image:
-      "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80",
-  },
-];
-
 const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
+  const [stockItems, setStockItems] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    quantity: "",
+    unit: "kg",
+    pricePerUnit: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const loadInventory = async () => {
+    try {
+      const result = await getInventory();
+      // @ts-ignore
+      setStockItems(result || []);
+    } catch (err) {
+      console.error("Failed to load inventory", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await addProduct({
+        name: newProduct.name,
+        quantity: Number(newProduct.quantity),
+        unit: newProduct.unit,
+        pricePerUnit: Number(newProduct.pricePerUnit),
+        // Random image for now or default
+        image: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80"
+      });
+      setIsAddModalOpen(false);
+      setNewProduct({ name: "", quantity: "", unit: "kg", pricePerUnit: "" });
+      loadInventory(); // Refresh list
+    } catch (err) {
+      console.error("Failed to add product", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <section className="relative w-full max-w-[680px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-20">
       <header className="flex items-center justify-between">
@@ -98,7 +106,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
             <div>
               <p className="m-0 text-xs font-semibold text-[var(--muted)]">Total Stock</p>
               <p className="m-0 mt-2 text-2xl font-bold">
-                1,250 <span className="text-sm font-semibold text-[var(--muted)]">kg</span>
+                {stockItems.reduce((acc, item) => acc + item.quantity, 0).toLocaleString()} <span className="text-sm font-semibold text-[var(--muted)]">kg</span>
               </p>
             </div>
           </div>
@@ -115,7 +123,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
             <div>
               <p className="m-0 text-xs font-semibold text-[var(--muted)]">Crop Types</p>
               <p className="m-0 mt-2 text-2xl font-bold">
-                4 <span className="text-sm font-semibold text-[var(--muted)]">Crops</span>
+                {stockItems.length} <span className="text-sm font-semibold text-[var(--muted)]">Crops</span>
               </p>
             </div>
           </div>
@@ -155,12 +163,16 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
       </div>
 
       <div className="flex flex-col gap-4">
+        {loading && <p className="text-center text-[var(--muted)]">Loading inventory...</p>}
+        {!loading && stockItems.length === 0 && (
+          <p className="text-center text-[var(--muted)]">No items in inventory. Add your first crop!</p>
+        )}
         {stockItems.map((item) => (
-          <div key={item.name} className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
+          <div key={item._id} className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
                 <img
-                  src={item.image}
+                  src={item.image || "https://placehold.co/100"}
                   alt=""
                   className="h-16 w-16 rounded-[16px] object-cover"
                   loading="lazy"
@@ -168,8 +180,8 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="m-0 text-base font-semibold">{item.name}</p>
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase ${item.statusClass}`}>
-                      {item.status}
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase bg-[var(--accent-soft)] text-[var(--accent)]`}>
+                      {item.status || "In storage"}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-[var(--muted)]">
@@ -178,7 +190,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
                       <path d="M8 3v4" />
                       <path d="M16 3v4" />
                     </svg>
-                    Stored: {item.stored}
+                    Stored: {new Date(item.dateAdded).toLocaleDateString()}
                   </div>
                   <p className="mt-2 text-2xl font-bold text-[var(--accent)]">
                     {item.quantity} <span className="text-sm font-semibold text-[var(--muted)]">{item.unit}</span>
@@ -198,11 +210,84 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
 
       <button
         type="button"
+        onClick={() => setIsAddModalOpen(true)}
         className="fixed bottom-24 right-6 sm:right-10 h-14 w-14 rounded-full bg-[var(--accent)] text-3xl text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.4)]"
         aria-label="Add crop"
       >
         +
       </button>
+
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[24px] bg-[var(--bg)] p-6 shadow-2xl animate-[rise_0.3s_ease_both]">
+            <h3 className="mb-4 text-lg font-bold">Add New Crop</h3>
+            <form onSubmit={handleAddProduct} className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">Crop Name</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full rounded-[12px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+                  value={newProduct.name}
+                  onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                  placeholder="e.g. Maize, Beans"
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">Quantity</label>
+                  <input
+                    type="number"
+                    required
+                    className="w-full rounded-[12px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+                    value={newProduct.quantity}
+                    onChange={e => setNewProduct({ ...newProduct, quantity: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="w-24">
+                  <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">Unit</label>
+                  <select
+                    className="w-full rounded-[12px] border border-[var(--stroke)] bg-[var(--surface)] px-3 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+                    value={newProduct.unit}
+                    onChange={e => setNewProduct({ ...newProduct, unit: e.target.value })}
+                  >
+                    <option value="kg">kg</option>
+                    <option value="tons">tons</option>
+                    <option value="pcs">pcs</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">Price per Unit (RWF)</label>
+                <input
+                  type="number"
+                  className="w-full rounded-[12px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+                  value={newProduct.pricePerUnit}
+                  onChange={e => setNewProduct({ ...newProduct, pricePerUnit: e.target.value })}
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="mt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="flex-1 rounded-[14px] bg-[var(--surface-2)] py-3 text-sm font-semibold text-[var(--muted)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 rounded-[14px] bg-[var(--accent)] py-3 text-sm font-semibold text-[#0b1307]"
+                >
+                  {submitting ? "Adding..." : "Add Crop"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <nav className="mt-4 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
@@ -224,6 +309,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M3 7h18v12H3z" />
                 <path d="M3 11h18" />
+                <path d="M9 7v12" />
                 <path d="M9 7v12" />
               </svg>
             ),
@@ -265,9 +351,8 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
             key={item.label}
             type="button"
             onClick={() => item.target && onNavigate?.(item.target)}
-            className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${
-              item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
-            }`}
+            className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
+              }`}
           >
             <span className="grid h-8 w-8 place-items-center rounded-[12px] bg-[var(--surface)]">
               {item.icon}

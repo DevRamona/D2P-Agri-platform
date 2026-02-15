@@ -1,10 +1,17 @@
 const express = require("express");
-const { getDashboard } = require("../controllers/farmerController");
+const { getDashboard, getInventory, addProduct, createBatch } = require("../controllers/farmerController");
 const { authGuard } = require("../middleware/authGuard");
 const { roleGuard } = require("../middleware/roleGuard");
 
 const router = express.Router();
 
-router.get("/dashboard", authGuard, roleGuard(["FARMER"]), getDashboard);
+// Apply guards to all routes if appropriate, or individually
+router.use(authGuard);
+router.use(roleGuard(["FARMER"]));
+
+router.get("/dashboard", getDashboard);
+router.get("/inventory", getInventory);
+router.post("/inventory", addProduct);
+router.post("/batch", createBatch);
 
 module.exports = router;
