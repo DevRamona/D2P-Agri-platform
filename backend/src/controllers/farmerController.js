@@ -102,9 +102,31 @@ const createBatch = async (req, res) => {
     }
 };
 
+const getBatchById = async (req, res) => {
+    try {
+        const batch = await Batch.findById(req.params.id)
+            .populate('products.product', 'name unit image');
+
+        if (!batch) {
+            return res.status(404).json(failure("NOT_FOUND", "Batch not found"));
+        }
+
+        // Check if the batch belongs to the authenticated farmer
+        if (batch.farmer.toString() !== req.user.id) {
+            return res.status(403).json(failure("FORBIDDEN", "You do not have permission to view this batch"));
+        }
+
+        return res.status(200).json(success(batch));
+    } catch (error) {
+        console.error("Get batch error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
 module.exports = {
     getDashboard,
     getInventory,
     addProduct,
     createBatch,
+    getBatchById,
 };

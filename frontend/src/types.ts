@@ -14,6 +14,7 @@ export type ViewMode =
   | "buyer-batch-details"
   | "order-review"
   | "order-tracking"
-  | "buyer-order-history";
+  | "buyer-order-history"
+  | string; // Allow dynamic paths like batch-tracker/:id
 
 export type ThemeMode = "light" | "dark";

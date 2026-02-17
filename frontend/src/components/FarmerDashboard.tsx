@@ -193,7 +193,13 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
         )}
 
         {data?.activeBatches.map((batch) => (
-          <div key={batch._id} className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4 shadow-sm">
+          <div
+            key={batch._id}
+            className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4 shadow-sm cursor-pointer transition-transform hover:scale-[1.02]"
+            onClick={() => {
+              onNavigate?.(`batch-tracker/${batch._id}`);
+            }}
+          >
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center gap-2">
@@ -219,7 +225,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
                 {(() => {
                   // @ts-ignore
                   const firstProduct = batch.products?.[0]?.product;
-                  let imageUrl = firstProduct?.image;
+                  let imageUrl = (firstProduct as any)?.image;
 
                   // Handle relative paths from backend uploads
                   if (imageUrl && imageUrl.startsWith('/uploads')) {

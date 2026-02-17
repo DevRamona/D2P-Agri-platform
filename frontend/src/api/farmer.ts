@@ -68,3 +68,6 @@ export const createBatch = (data: Partial<Batch>) =>
         method: "POST",
         body: JSON.stringify(data),
     });
+
+export const getBatchById = (id: string) =>
+    apiFetch<Batch>(`/farmer/batch/${id}`);
