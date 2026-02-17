@@ -1,6 +1,6 @@
 import { apiFetch } from "./client";
 
-import { apiFetch } from "./client";
+
 
 export type Product = {
     _id: string;
@@ -42,11 +42,26 @@ export const getDashboard = () =>
 export const getInventory = () =>
     apiFetch<{ data: Product[] }>("/farmer/inventory");
 
-export const addProduct = (data: Partial<Product>) =>
-    apiFetch<{ data: Product }>("/farmer/inventory", {
+export const addProduct = (data: Partial<Product> & { imageFile?: File }) => {
+    if (data.imageFile) {
+        const formData = new FormData();
+        formData.append("name", data.name || "");
+        formData.append("quantity", String(data.quantity || 0));
+        formData.append("unit", data.unit || "kg");
+        formData.append("pricePerUnit", String(data.pricePerUnit || 0));
+        formData.append("image", data.imageFile);
+
+        return apiFetch<{ data: Product }>("/farmer/inventory", {
+            method: "POST",
+            body: formData,
+        });
+    }
+
+    return apiFetch<{ data: Product }>("/farmer/inventory", {
         method: "POST",
         body: JSON.stringify(data),
     });
+};
 
 export const createBatch = (data: Partial<Batch>) =>
     apiFetch<{ data: Batch }>("/farmer/batch", {

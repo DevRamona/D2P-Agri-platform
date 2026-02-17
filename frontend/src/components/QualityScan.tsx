@@ -20,7 +20,7 @@ const QualityScan = ({ onNavigate }: QualityScanProps) => {
           <button
             type="button"
             className="grid h-11 w-11 place-items-center rounded-full bg-black/30 text-white"
-            onClick={() => onNavigate?.("farmer-dashboard")}
+            onClick={() => onNavigate?.("dashboard")}
             aria-label="Go back"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

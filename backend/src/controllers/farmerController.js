@@ -6,11 +6,11 @@ const Batch = require("../models/Batch");
 
 const getDashboard = async (req, res) => {
     try {
-        const userId = req.user._id;
+        const userId = req.user.id;
 
         // Fetch active batches
         const activeBatches = await Batch.find({ farmer: userId, status: 'active' })
-            .populate('products.product', 'name unit')
+            .populate('products.product', 'name unit image')
             .sort({ createdAt: -1 });
 
         // Calculate total earnings from sold batches
@@ -45,7 +45,7 @@ const getDashboard = async (req, res) => {
 
 const getInventory = async (req, res) => {
     try {
-        const products = await Product.find({ farmer: req.user._id }).sort({ dateAdded: -1 });
+        const products = await Product.find({ farmer: req.user.id }).sort({ dateAdded: -1 });
         return res.status(200).json(success(products));
     } catch (error) {
         console.error("Get inventory error:", error);
@@ -55,10 +55,17 @@ const getInventory = async (req, res) => {
 
 const addProduct = async (req, res) => {
     try {
-        const { name, quantity, unit, pricePerUnit, image } = req.body;
+        const { name, quantity, unit, pricePerUnit } = req.body;
+        let image = req.body.image;
+
+        if (req.file) {
+            // Construct full URL or relative path
+            // For now, let's store the relative path which the frontend can prefix
+            image = `/uploads/${req.file.filename}`;
+        }
 
         const newProduct = new Product({
-            farmer: req.user._id,
+            farmer: req.user.id,
             name,
             quantity,
             unit,
@@ -76,10 +83,11 @@ const addProduct = async (req, res) => {
 
 const createBatch = async (req, res) => {
     try {
+        console.log("Create Batch Payload:", JSON.stringify(req.body, null, 2));
         const { products, totalWeight, totalPrice, destination } = req.body;
 
         const newBatch = new Batch({
-            farmer: req.user._id,
+            farmer: req.user.id,
             products,
             totalWeight,
             totalPrice,
@@ -90,7 +98,7 @@ const createBatch = async (req, res) => {
         return res.status(201).json(success(newBatch));
     } catch (error) {
         console.error("Create batch error:", error);
-        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+        return res.status(500).json(failure("INTERNAL_ERROR", error.message));
     }
 };
 

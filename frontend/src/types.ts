@@ -3,7 +3,7 @@ export type UserRole = "farmer" | "buyer";
 export type ViewMode =
   | "welcome"
   | "auth"
-  | "farmer-dashboard"
+  | "dashboard"
   | "inventory"
   | "quality-scan"
   | "ai-diagnosis"

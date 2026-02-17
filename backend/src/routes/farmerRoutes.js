@@ -7,11 +7,13 @@ const router = express.Router();
 
 // Apply guards to all routes if appropriate, or individually
 router.use(authGuard);
-router.use(roleGuard(["FARMER"]));
+router.use(roleGuard("FARMER"));
+
+const upload = require("../middleware/upload");
 
 router.get("/dashboard", getDashboard);
 router.get("/inventory", getInventory);
-router.post("/inventory", addProduct);
+router.post("/inventory", upload.single("image"), addProduct);
 router.post("/batch", createBatch);
 
 module.exports = router;

@@ -1,0 +1,10 @@
+torch
+torchvision
+torchaudio
+fastapi
+uvicorn
+python-multipart
+pillow
+numpy
+scikit-learn
+matplotlib

@@ -211,12 +211,47 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
                 <p className="m-0 text-xs text-[var(--muted)]">{(batch.totalWeight || 0).toLocaleString()} kg</p>
               </div>
             </div>
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {batch.products?.map((p: any, idx: number) => (
-                <span key={idx} className="whitespace-nowrap rounded-[8px] bg-[var(--surface-2)] px-2 py-1 text-[10px] text-[var(--muted)]">
-                  {p.product?.name || "Unknown"} ({p.quantity} kg)
-                </span>
-              ))}
+
+            {/* Batch Image & Products */}
+            <div className="mt-3 flex gap-3">
+              {/* Display image of the first product if available */}
+              <div className="relative h-16 w-16 flex-shrink-0 rounded-[12px] bg-[var(--surface-2)] overflow-hidden">
+                {(() => {
+                  // @ts-ignore
+                  const firstProduct = batch.products?.[0]?.product;
+                  let imageUrl = firstProduct?.image;
+
+                  // Handle relative paths from backend uploads
+                  if (imageUrl && imageUrl.startsWith('/uploads')) {
+                    const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
+                    imageUrl = `${API_BASE}${imageUrl}`;
+                  }
+
+                  return (
+                    <img
+                      src={imageUrl || "https://placehold.co/100"}
+                      alt="Batch"
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://placehold.co/100?text=No+Image";
+                      }}
+                    />
+                  );
+                })()}
+              </div>
+
+              <div className="flex flex-col justify-center">
+                {batch.products?.slice(0, 2).map((p: any, idx: number) => (
+                  <div key={idx} className="text-xs text-[var(--text)]">
+                    <span className="font-semibold">{p.product?.name || "Crop"}</span>
+                    <span className="text-[var(--muted)]"> • {p.quantity} kg</span>
+                  </div>
+                ))}
+                {(batch.products?.length || 0) > 2 && (
+                  <span className="text-[10px] text-[var(--muted)]">+{batch.products.length - 2} more</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -231,7 +266,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
           {
             label: "Home",
             active: true,
-            target: "farmer-dashboard" as const,
+            target: "dashboard" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M3 11l9-7 9 7" />

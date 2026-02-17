@@ -18,10 +18,24 @@ const BatchCreation = ({ onNavigate }: BatchCreationProps) => {
     unit: "kg",
     pricePerUnit: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [totalPrice, setTotalPrice] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   useEffect(() => {
     loadInventory();
@@ -90,7 +104,11 @@ const BatchCreation = ({ onNavigate }: BatchCreationProps) => {
           quantity: Number(newProduct.quantity),
           unit: newProduct.unit,
           pricePerUnit: Number(newProduct.pricePerUnit),
-          image: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80"
+          // If no file, backend might set default or we can send a placeholder string if we want
+          // But here let's rely on the file if present
+          imageFile: imageFile || undefined,
+          // Fallback image if no file upload (optional, but good for UI consistency if backend requires one)
+          image: !imageFile ? "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80" : undefined
         });
 
         // @ts-ignore
@@ -122,10 +140,11 @@ const BatchCreation = ({ onNavigate }: BatchCreationProps) => {
         status: 'active'
       });
 
-      onNavigate?.("farmer-dashboard");
+      onNavigate?.("dashboard");
     } catch (err) {
       console.error("Failed to create batch", err);
-      alert("Failed to create batch. Please try again.");
+      // @ts-ignore
+      alert(`Failed to create batch: ${err.message || "Unknown error"}`);
     } finally {
       setSubmitting(false);
     }
@@ -137,7 +156,7 @@ const BatchCreation = ({ onNavigate }: BatchCreationProps) => {
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
-          onClick={() => onNavigate?.("farmer-dashboard")}
+          onClick={() => onNavigate?.("dashboard")}
           aria-label="Go back"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -174,6 +193,35 @@ const BatchCreation = ({ onNavigate }: BatchCreationProps) => {
       {mode === 'create' ? (
         <div className="flex flex-col gap-4 rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-5">
           <h3 className="m-0 text-sm font-semibold text-[var(--muted)]">Crop Details</h3>
+
+
+          {/* Image Upload Section */}
+          <div className="flex flex-col items-center justify-center gap-3">
+            <div
+              className="relative h-32 w-full rounded-[16px] border-2 border-dashed border-[var(--stroke)] bg-[var(--bg)] grid place-items-center cursor-pointer overflow-hidden hover:border-[var(--accent)] transition-colors"
+              onClick={() => document.getElementById('crop-image-upload')?.click()}
+            >
+              {imagePreview ? (
+                <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-[var(--muted)]">
+                  <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                  <span className="text-xs font-semibold">Tap to upload crop image</span>
+                </div>
+              )}
+              <input
+                type="file"
+                id="crop-image-upload"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageChange}
+              />
+            </div>
+          </div>
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">Crop Name</label>

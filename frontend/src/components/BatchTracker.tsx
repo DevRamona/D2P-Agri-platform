@@ -11,7 +11,7 @@ const BatchTracker = ({ onNavigate }: BatchTrackerProps) => {
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
-          onClick={() => onNavigate?.("farmer-dashboard")}
+          onClick={() => onNavigate?.("dashboard")}
           aria-label="Go back"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

@@ -294,7 +294,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
           {
             label: "Home",
             active: false,
-            target: "farmer-dashboard" as const,
+            target: "dashboard" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M3 11l9-7 9 7" />
