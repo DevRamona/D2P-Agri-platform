@@ -38,7 +38,6 @@ const getInitialTheme = (): ThemeMode => {
 };
 
 const App = () => {
-  const [role, setRole] = useState<UserRole>("farmer");
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [isRestoring, setIsRestoring] = useState(true);
   const navigate = useNavigate();
@@ -57,7 +56,6 @@ const App = () => {
 
       if (storedUser && refreshToken) {
         const userRole = fromApiRole(storedUser.role);
-        setRole(userRole);
         if (location.pathname === "/" || location.pathname.startsWith("/auth")) {
           navigate(userRole === "farmer" ? "/farmer/dashboard" : "/buyer/marketplace");
         }
@@ -89,7 +87,6 @@ const App = () => {
     if (user) {
       setStoredUser(user);
     }
-    setRole(nextRole);
     navigate(nextRole === "farmer" ? "/farmer/dashboard" : "/buyer/marketplace");
   };
 
