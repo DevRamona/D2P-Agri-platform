@@ -38,11 +38,18 @@ ml-service/
 
 ## Training
 
+Optional (recommended): create deterministic `train/val/test` split once:
+
+```bash
+cd ml-service
+python model/split_dataset.py --data_dir "../ml-models/bean-dataset" --output_dir "../ml-models/bean-dataset-split" --overwrite
+```
+
 To train the model:
 
 ```bash
 cd ml-service
-python model/train.py --data_dir "../ml-models/bean-dataset" --epochs 10 --batch_size 32
+python model/train.py --data_dir "../ml-models/bean-dataset-split" --epochs 10 --batch_size 32
 ```
 This will save the best model to `./best_model.pth`.
 
@@ -51,7 +58,7 @@ This will save the best model to `./best_model.pth`.
 To evaluate the trained model:
 
 ```bash
-python model/evaluate.py --model_path "best_model.pth" --data_dir "../ml-models/bean-dataset"
+python model/evaluate.py --model_path "best_model.pth" --data_dir "../ml-models/bean-dataset-split"
 ```
 Check `confusion_matrix.png` for results.
 
@@ -60,8 +67,8 @@ Check `confusion_matrix.png` for results.
 To start the FastAPI server:
 
 ```bash
-cd app
-uvicorn api:app --reload
+cd ml-service
+uvicorn app.api:app --reload
 ```
 The API will be available at `http://localhost:8000`.
 

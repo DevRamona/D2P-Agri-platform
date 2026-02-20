@@ -8,3 +8,5 @@ pillow
 numpy
 scikit-learn
 matplotlib
+opencv-python
+seaborn
