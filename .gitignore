@@ -7,3 +7,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# ML Artifacts
+*.pth
+*.png
+__pycache__/
+*.pyc
+
+# User Uploads
+backend/uploads/

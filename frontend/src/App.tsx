@@ -156,7 +156,7 @@ const App = () => {
           <Route path="/farmer/quality-scan" element={<QualityScan onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/ai-diagnosis" element={<AIDiagnosis onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-creation" element={<BatchCreation onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
-          <Route path="/farmer/batch-tracker" element={<BatchTracker onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
+          <Route path="/farmer/batch-tracker/:id" element={<BatchTracker onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/wallet" element={<Wallet onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
 
           {/* Buyer Routes */}

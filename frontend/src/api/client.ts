@@ -1,4 +1,5 @@
-﻿const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
+﻿import { getAccessToken } from "../utils/authStorage";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 type ApiError = {
   code: string;
@@ -24,11 +25,16 @@ export class ApiRequestError extends Error {
 }
 
 const apiFetch = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
+  const token = getAccessToken();
+  const isFormData = options.body instanceof FormData;
+  const headers = {
+    ...(!isFormData && { "Content-Type": "application/json" }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
     ...options,
   });
 

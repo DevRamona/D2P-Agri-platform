@@ -46,7 +46,7 @@ const Wallet = ({ onNavigate }: WalletProps) => {
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
-          onClick={() => onNavigate?.("farmer-dashboard")}
+          onClick={() => onNavigate?.("dashboard")}
           aria-label="Go back"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -113,13 +113,12 @@ const Wallet = ({ onNavigate }: WalletProps) => {
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <span
-                  className={`grid h-12 w-12 place-items-center rounded-[16px] ${
-                    activity.icon === "up"
+                  className={`grid h-12 w-12 place-items-center rounded-[16px] ${activity.icon === "up"
                       ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                       : activity.icon === "down"
-                      ? "bg-red-500/15 text-red-400"
-                      : "bg-amber-400/20 text-amber-300"
-                  }`}
+                        ? "bg-red-500/15 text-red-400"
+                        : "bg-amber-400/20 text-amber-300"
+                    }`}
                 >
                   {activity.icon === "up" && (
                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -147,9 +146,8 @@ const Wallet = ({ onNavigate }: WalletProps) => {
               </div>
               <div className="text-right">
                 <p
-                  className={`m-0 text-base font-semibold ${
-                    activity.amount.startsWith("-") ? "text-red-400" : "text-[var(--accent)]"
-                  }`}
+                  className={`m-0 text-base font-semibold ${activity.amount.startsWith("-") ? "text-red-400" : "text-[var(--accent)]"
+                    }`}
                 >
                   {activity.amount}
                 </p>
@@ -172,9 +170,8 @@ const Wallet = ({ onNavigate }: WalletProps) => {
           <button
             key={item.label}
             type="button"
-            className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${
-              item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
-            }`}
+            className={`flex flex-col items-center gap-1 rounded-[14px] px-2 py-2 text-[10px] font-semibold ${item.active ? "text-[var(--accent)]" : "text-[var(--muted)]"
+              }`}
           >
             <span className="grid h-8 w-8 place-items-center rounded-[12px] bg-[var(--surface)]">
               {item.label === "Market" && (
