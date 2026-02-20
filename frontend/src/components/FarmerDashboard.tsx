@@ -123,7 +123,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
         <button
           className="rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
           type="button"
-          onClick={() => onNavigate?.("quality-scan")}
+          onClick={() => onNavigate?.("ai-scanner")}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-2)]">
             <svg className="h-5 w-5 text-[var(--accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

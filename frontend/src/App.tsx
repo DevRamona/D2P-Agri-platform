@@ -5,6 +5,7 @@ import FarmerDashboard from "./components/FarmerDashboard";
 import ProduceInventory from "./components/ProduceInventory";
 import QualityScan from "./components/QualityScan";
 import AIDiagnosis from "./components/AIDiagnosis";
+import AIQualityScanner from "./components/AIQualityScanner";
 import BatchCreation from "./components/BatchCreation";
 import BatchTracker from "./components/BatchTracker";
 import Wallet from "./components/Wallet";
@@ -38,7 +39,6 @@ const getInitialTheme = (): ThemeMode => {
 };
 
 const App = () => {
-  const [role, setRole] = useState<UserRole>("farmer");
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [isRestoring, setIsRestoring] = useState(true);
   const navigate = useNavigate();
@@ -57,7 +57,6 @@ const App = () => {
 
       if (storedUser && refreshToken) {
         const userRole = fromApiRole(storedUser.role);
-        setRole(userRole);
         if (location.pathname === "/" || location.pathname.startsWith("/auth")) {
           navigate(userRole === "farmer" ? "/farmer/dashboard" : "/buyer/marketplace");
         }
@@ -65,7 +64,7 @@ const App = () => {
       setIsRestoring(false);
     };
     restoreSession();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, navigate]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
@@ -77,7 +76,6 @@ const App = () => {
       try {
         await logout(refreshToken);
       } catch (error) {
-        // ignore logout errors
       }
     }
     clearTokens();
@@ -89,7 +87,6 @@ const App = () => {
     if (user) {
       setStoredUser(user);
     }
-    setRole(nextRole);
     navigate(nextRole === "farmer" ? "/farmer/dashboard" : "/buyer/marketplace");
   };
 
@@ -98,7 +95,7 @@ const App = () => {
   };
 
   if (isRestoring) {
-    return null; // Or a loading spinner
+    return null;
   }
 
   return (
@@ -147,7 +144,6 @@ const App = () => {
             }
           />
 
-          {/* Farmer Routes */}
           <Route
             path="/farmer/dashboard"
             element={<FarmerDashboard onLogout={handleLogout} onNavigate={(view) => navigate(`/farmer/${view}`)} />}
@@ -155,11 +151,11 @@ const App = () => {
           <Route path="/farmer/inventory" element={<ProduceInventory onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/quality-scan" element={<QualityScan onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/ai-diagnosis" element={<AIDiagnosis onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
+          <Route path="/farmer/ai-scanner" element={<AIQualityScanner onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-creation" element={<BatchCreation onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-tracker/:id" element={<BatchTracker onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/wallet" element={<Wallet onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
 
-          {/* Buyer Routes */}
           <Route
             path="/buyer/marketplace"
             element={<BuyerMarketplace onNavigate={(view) => navigate(`/buyer/${view}`)} />}
@@ -169,7 +165,6 @@ const App = () => {
           <Route path="/buyer/order-tracking" element={<OrderTracking onNavigate={(view) => navigate(`/buyer/${view}`)} />} />
           <Route path="/buyer/order-history" element={<BuyerOrderHistory onNavigate={(view) => navigate(`/buyer/${view}`)} />} />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

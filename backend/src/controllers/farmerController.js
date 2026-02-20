@@ -4,23 +4,18 @@ const Batch = require("../models/Batch");
 const crypto = require('crypto');
 const fs = require('fs');
 
-// Helper to generate deterministic mock data based on image content
 const calculateMockQuality = (buffer) => {
-    // Create a hash of the image to ensure same image = same results
     const hash = crypto.createHash('md5').update(buffer).digest('hex');
-    const numHash = parseInt(hash.substring(0, 8), 16); // Use first 8 chars for number
+    const numHash = parseInt(hash.substring(0, 8), 16);
 
-    // Moisture: Range 12.0% - 16.0%
     const moistureRaw = 12.0 + (numHash % 40) / 10;
     const moisture = moistureRaw.toFixed(1) + "%";
 
-    // Grade: A (50%), B (30%), C (20%)
     const gradeHash = numHash % 100;
     let grade = "Grade A";
     if (gradeHash > 80) grade = "Grade C";
     else if (gradeHash > 50) grade = "Grade B";
 
-    // Fallback Disease (if ML unavailable): 70% Healthy, 30% Random Disease
     const diseases = ["bean_rust", "angular_leaf_spot"];
     const isHealthy = (numHash % 10) < 7;
     const fallbackDisease = isHealthy ? "healthy" : diseases[numHash % diseases.length];
@@ -32,19 +27,15 @@ const getDashboard = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch active batches
         const activeBatches = await Batch.find({ farmer: userId, status: 'active' })
             .populate('products.product', 'name unit image')
             .sort({ createdAt: -1 });
 
-        // Calculate total earnings from sold batches
         const soldBatches = await Batch.find({ farmer: userId, status: 'sold' });
         const totalEarnings = soldBatches.reduce((sum, batch) => sum + batch.totalPrice, 0);
 
-        // Calculate earnings change (mock logic for now, or compare with last month)
         const earningsChange = "+0% vs last month";
 
-        // Mock market prices
         const marketPrices = [
             { crop: "Arabica Coffee", price: "2,400", unit: "/kg", change: "+2.4%", positive: true },
             { crop: "Maize", price: "650", unit: "/kg", change: "-0.8%", positive: false },
@@ -149,12 +140,10 @@ const scanQuality = async (req, res) => {
             return res.status(400).json(failure("BAD_REQUEST", "Image file is required"));
         }
 
-        // Handle DiskStorage: Read file from path if buffer is missing
         let fileBuffer;
         if (req.file.buffer) {
             fileBuffer = req.file.buffer;
         } else if (req.file.path) {
-            // Read from disk
             try {
                 fileBuffer = fs.readFileSync(req.file.path);
             } catch (readError) {
@@ -166,17 +155,14 @@ const scanQuality = async (req, res) => {
             return res.status(500).json(failure("INTERNAL_ERROR", "File upload failed"));
         }
 
-        // 1. Generate Deterministic Mock Data
         const { moisture, grade, fallbackDisease } = calculateMockQuality(fileBuffer);
 
-        // 2. Prepare to send to ML Service
         const formData = new FormData();
         const imageBlob = new Blob([fileBuffer], {
             type: req.file.mimetype || 'application/octet-stream',
         });
         formData.append('file', imageBlob, req.file.originalname || 'scan.jpg');
 
-        // 3. Call ML Service
         const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
         let mlResult = null;
         let usedFallback = false;
@@ -198,18 +184,16 @@ const scanQuality = async (req, res) => {
             usedFallback = true;
         }
 
-        // 4. Apply Fallback if ML failed
         if (usedFallback || !mlResult) {
             mlResult = {
                 label: fallbackDisease,
-                confidence: 0.85 + (Math.random() * 0.1), // Mock confidence
+                confidence: 0.85 + (Math.random() * 0.1),
                 recommendation: fallbackDisease === "healthy"
-                    ? "Great news! Your plant looks healthy. Continue with regular care."
+                    ? "Plant appears healthy. Continue routine monitoring and care."
                     : `${fallbackDisease.replace('_', ' ')} detected. Recommendation: Isolate infected plants and monitor moisture levels.`
             };
         }
 
-        // 5. Combine Results
         const result = {
             moisture: moisture,
             grade: grade,

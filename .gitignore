@@ -8,11 +8,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# ML Artifacts
 *.pth
 *.png
 __pycache__/
 *.pyc
 
-# User Uploads
 backend/uploads/
+*.tsbuildinfo
+ml-models/bean-dataset-split/
+confusion_matrix.png
+frontend/vite.config.js
+frontend/vite.config.d.ts
