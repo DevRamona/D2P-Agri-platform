@@ -14,6 +14,7 @@ import BuyerBatchDetails from "./components/BuyerBatchDetails";
 import OrderReview from "./components/OrderReview";
 import OrderTracking from "./components/OrderTracking";
 import BuyerOrderHistory from "./components/BuyerOrderHistory";
+import BuyerProfile from "./components/BuyerProfile";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole } from "./types";
 import { logout, fromApiRole, type ApiUser } from "./api/auth";
@@ -95,6 +96,11 @@ const App = () => {
     navigate(`/auth/${tab}`);
   };
 
+  const navigateBuyerView = (view: string) => {
+    const normalized = view.startsWith("buyer-") ? view.slice("buyer-".length) : view;
+    navigate(`/buyer/${normalized}`);
+  };
+
   if (isRestoring) {
     return null; // Or a loading spinner
   }
@@ -161,12 +167,13 @@ const App = () => {
           {/* Buyer Routes */}
           <Route
             path="/buyer/marketplace"
-            element={<BuyerMarketplace onNavigate={(view) => navigate(`/buyer/${view}`)} />}
+            element={<BuyerMarketplace onNavigate={navigateBuyerView} />}
           />
-          <Route path="/buyer/batch-details" element={<BuyerBatchDetails onNavigate={(view) => navigate(`/buyer/${view}`)} />} />
-          <Route path="/buyer/order-review" element={<OrderReview onNavigate={(view) => navigate(`/buyer/${view}`)} />} />
-          <Route path="/buyer/order-tracking" element={<OrderTracking onNavigate={(view) => navigate(`/buyer/${view}`)} />} />
-          <Route path="/buyer/order-history" element={<BuyerOrderHistory onNavigate={(view) => navigate(`/buyer/${view}`)} />} />
+          <Route path="/buyer/batch-details" element={<BuyerBatchDetails onNavigate={navigateBuyerView} />} />
+          <Route path="/buyer/order-review" element={<OrderReview onNavigate={navigateBuyerView} />} />
+          <Route path="/buyer/order-tracking" element={<OrderTracking onNavigate={navigateBuyerView} />} />
+          <Route path="/buyer/order-history" element={<BuyerOrderHistory onNavigate={navigateBuyerView} />} />
+          <Route path="/buyer/profile" element={<BuyerProfile onNavigate={navigateBuyerView} onLogout={handleLogout} />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

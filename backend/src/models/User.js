@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["FARMER", "BUYER"], required: true },
+    stripeConnectAccountId: { type: String, trim: true, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: true } }
 );

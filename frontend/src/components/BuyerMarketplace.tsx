@@ -1,53 +1,124 @@
-﻿import type { ViewMode } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import { API_BASE } from "../api/client";
+import {
+  getBuyerMarketplace,
+  type BuyerMarketplaceBatch,
+  type BuyerMarketplaceCategory,
+  type BuyerMarketplaceData,
+} from "../api/buyer";
+import type { ViewMode } from "../types";
+import { setBuyerSelectedBatch } from "../utils/buyerCheckout";
 
 interface BuyerMarketplaceProps {
   onNavigate?: (view: ViewMode) => void;
 }
 
-const categories = [
-  { label: "All Crops", active: true },
-  { label: "Maize", active: false },
-  { label: "Beans", active: false },
-  { label: "Coffee", active: false },
-];
+const FALLBACK_IMAGE = "https://placehold.co/900x400?text=Produce+Batch";
 
-const batches = [
-  {
-    title: "Premium Grade A Maize",
-    location: "Kayonza District, Eastern Province",
-    weight: "2,500",
-    price: "450",
-    total: "1,125,000",
-    tag: "Verified",
-    score: "9.2/10",
-    image:
-      "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    title: "Red Kidney Beans",
-    location: "Musanze District, Northern Province",
-    weight: "1,200",
-    price: "820",
-    total: "984,000",
-    tag: "Top Quality",
-    score: "8.8/10",
-    image:
-      "https://images.unsplash.com/photo-1517130038641-a774d04afb3c?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    title: "Arabica Coffee Cherries",
-    location: "Nyamagabe District, Southern Province",
-    weight: "1,800",
-    price: "1,100",
-    total: "1,980,000",
-    tag: "Pending",
-    score: "--",
-    image:
-      "https://images.unsplash.com/photo-1447933601403-0c6688de566e?auto=format&fit=crop&w=900&q=80",
-  },
-];
+const normalizeCropKey = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes("bean")) return "beans";
+  if (normalized.includes("maize") || normalized.includes("corn")) return "maize";
+  if (normalized.includes("coffee")) return "coffee";
+  return normalized;
+};
+
+const resolveImageUrl = (image: string | null) => {
+  if (!image) return FALLBACK_IMAGE;
+  if (image.startsWith("/uploads")) {
+    return `${API_BASE}${image}`;
+  }
+  return image;
+};
+
+const formatCurrency = (value: number) => Math.round(Number(value) || 0).toLocaleString();
 
 const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
+  const [marketplace, setMarketplace] = useState<BuyerMarketplaceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMarketplace = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await getBuyerMarketplace();
+        if (!cancelled) {
+          setMarketplace(data);
+        }
+      } catch (err) {
+        console.error("Failed to load buyer marketplace", err);
+        if (!cancelled) {
+          setError("Unable to load available farmer batches right now.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadMarketplace();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories = useMemo(() => {
+    const backendCategories = marketplace?.categories || [];
+    if (backendCategories.length > 0) {
+      return backendCategories;
+    }
+    return [
+      { key: "all", label: "All Crops", count: 0 },
+      { key: "maize", label: "Maize", count: 0 },
+      { key: "beans", label: "Beans", count: 0 },
+      { key: "coffee", label: "Coffee", count: 0 },
+    ] as BuyerMarketplaceCategory[];
+  }, [marketplace]);
+
+  const visibleBatches = useMemo(() => {
+    const allBatches = marketplace?.batches || [];
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return allBatches.filter((batch) => {
+      const cropMatches = activeCategory === "all" || batch.cropKey === activeCategory;
+      if (!cropMatches) return false;
+
+      if (!normalizedSearch) return true;
+      const haystack = [
+        batch.title,
+        batch.farmerName,
+        batch.destination,
+        ...batch.cropNames,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [marketplace, searchTerm, activeCategory]);
+
+  const getCategoryCount = (categoryKey: string) => {
+    if (categoryKey === "all") return marketplace?.allCount ?? 0;
+    return (marketplace?.batches || []).filter((batch) => batch.cropKey === categoryKey).length;
+  };
+
+  const handleCategorySelect = (categoryKey: string) => {
+    setActiveCategory(categoryKey);
+  };
+
+  const renderBatchMeta = (batch: BuyerMarketplaceBatch) => {
+    const dateLabel = new Date(batch.createdAt).toLocaleDateString();
+    const cropSummary =
+      batch.cropNames.length > 0 ? batch.cropNames.join(", ") : `${normalizeCropKey(batch.cropKey)} crop batch`;
+    return `Farmer: ${batch.farmerName} · ${dateLabel} · ${cropSummary}`;
+  };
+
   return (
     <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-10">
       <header className="flex items-center justify-between">
@@ -65,7 +136,7 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
           </button>
           <div>
             <p className="m-0 text-base font-semibold">Marketplace</p>
-            <p className="m-0 text-xs text-[var(--accent)]">Buyer Portal · Rwanda</p>
+            <p className="m-0 text-xs text-[var(--accent)]">Buyer Portal · Live farmer batches</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -93,6 +164,12 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
         </div>
       </header>
 
+      {error && (
+        <div className="rounded-[16px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
       <div className="flex items-center gap-3 rounded-[16px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3">
         <svg className="h-4 w-4 text-[var(--muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
           <circle cx="11" cy="11" r="6" />
@@ -100,10 +177,12 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
         </svg>
         <input
           type="text"
-          placeholder="Search crops, regions or grades..."
+          placeholder="Search crops, farmers, destination..."
           className="w-full bg-transparent text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <button type="button" className="grid h-9 w-9 place-items-center rounded-[12px] bg-[var(--surface)]">
+        <button type="button" className="grid h-9 w-9 place-items-center rounded-[12px] bg-[var(--surface)]" aria-label="Filter">
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
             <path d="M4 6h16" />
             <path d="M8 12h8" />
@@ -113,36 +192,65 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-1">
-        {categories.map((cat) => (
-          <button
-            key={cat.label}
-            type="button"
-            className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold ${
-              cat.active
-                ? "bg-[var(--accent)] text-[#0b1307]"
-                : "border border-[var(--stroke)] bg-[var(--surface)] text-[var(--muted)]"
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const active = activeCategory === cat.key;
+          return (
+            <button
+              key={cat.key}
+              type="button"
+              onClick={() => handleCategorySelect(cat.key)}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold ${
+                active
+                  ? "bg-[var(--accent)] text-[#0b1307]"
+                  : "border border-[var(--stroke)] bg-[var(--surface)] text-[var(--muted)]"
+              }`}
+            >
+              {cat.label}{" "}
+              <span className={active ? "text-[#0b1307]/80" : "text-[var(--muted)]"}>
+                ({cat.key === "all" ? marketplace?.allCount ?? cat.count : getCategoryCount(cat.key)})
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between">
         <h3 className="m-0 text-base font-semibold">Available Batches</h3>
-        <span className="text-xs font-semibold text-[var(--accent)]">248 Total</span>
+        <span className="text-xs font-semibold text-[var(--accent)]">
+          {loading ? "Loading..." : `${visibleBatches.length} Listed`}
+        </span>
       </div>
 
       <div className="flex flex-col gap-5">
-        {batches.map((batch) => (
-          <div key={batch.title} className="overflow-hidden rounded-[24px] border border-[var(--stroke)] bg-[var(--surface)]">
+        {loading && (
+          <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+            Loading farmer batches...
+          </div>
+        )}
+
+        {!loading && visibleBatches.length === 0 && (
+          <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+            No batches match your current search/filter.
+          </div>
+        )}
+
+        {visibleBatches.map((batch) => (
+          <div key={batch.id} className="overflow-hidden rounded-[24px] border border-[var(--stroke)] bg-[var(--surface)]">
             <div className="relative">
-              <img src={batch.image} alt="" className="h-40 w-full object-cover" loading="lazy" />
+              <img
+                src={resolveImageUrl(batch.image)}
+                alt={batch.title}
+                className="h-40 w-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = FALLBACK_IMAGE;
+                }}
+              />
               <span className="absolute left-4 top-4 rounded-full bg-[var(--accent)] px-3 py-1 text-[10px] font-semibold text-[#0b1307]">
                 {batch.tag}
               </span>
               <span className="absolute right-4 top-4 rounded-[12px] bg-black/60 px-3 py-1 text-[10px] font-semibold text-white">
-                AI Score {batch.score}
+                AI Score {batch.aiScore == null ? "--" : `${batch.aiScore}/10`}
               </span>
             </div>
             <div className="p-4">
@@ -152,27 +260,35 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
                   <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z" />
                   <path d="M9 9h6" />
                 </svg>
-                {batch.location}
+                {batch.destination}
               </p>
+              <p className="mt-2 text-xs text-[var(--muted)]">{renderBatchMeta(batch)}</p>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-[var(--muted)]">
                 <div>
                   <p className="m-0 text-[10px] uppercase tracking-[2px]">Weight</p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--text)]">{batch.weight} kg</p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--text)]">
+                    {formatCurrency(batch.totalWeight)} kg
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="m-0 text-[10px] uppercase tracking-[2px]">Price / kg</p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--accent)]">{batch.price} RWF</p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--accent)]">
+                    {formatCurrency(batch.pricePerKg)} RWF
+                  </p>
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <div>
                   <p className="m-0 text-[10px] uppercase tracking-[2px] text-[var(--muted)]">Total Value</p>
-                  <p className="mt-1 text-sm font-semibold">{batch.total} RWF</p>
+                  <p className="mt-1 text-sm font-semibold">{formatCurrency(batch.totalPrice)} RWF</p>
                 </div>
                 <button
                   className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[#0b1307]"
                   type="button"
-                  onClick={() => onNavigate?.("buyer-batch-details")}
+                  onClick={() => {
+                    setBuyerSelectedBatch(batch);
+                    onNavigate?.("buyer-batch-details");
+                  }}
                 >
                   View Details
                 </button>
@@ -194,12 +310,19 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
         </svg>
       </button>
 
+      <p className="m-0 text-center text-xs text-[var(--muted)]">
+        Last synced:{" "}
+        {marketplace?.lastSynced
+          ? new Date(marketplace.lastSynced).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "--:--"}
+      </p>
+
       <nav className="mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
-          { label: "Discover", active: true },
+          { label: "Discover", active: true, target: "buyer-marketplace" as const },
           { label: "Orders", active: false, target: "buyer-order-history" as const },
           { label: "Bids", active: false },
-          { label: "Profile", active: false },
+          { label: "Profile", active: false, target: "buyer-profile" as const },
         ].map((item) => (
           <button
             key={item.label}
