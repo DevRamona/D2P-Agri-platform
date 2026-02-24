@@ -1,6 +1,7 @@
 const { success, failure } = require("../utils/response");
 const Product = require("../models/Product");
 const Batch = require("../models/Batch");
+const { getMarketPayload } = require("../services/marketPriceService");
 const crypto = require('crypto');
 const fs = require('fs');
 
@@ -43,25 +44,108 @@ const getDashboard = async (req, res) => {
 
         // Calculate earnings change (mock logic for now, or compare with last month)
         const earningsChange = "+0% vs last month";
-
-        // Mock market prices
-        const marketPrices = [
-            { crop: "Arabica Coffee", price: "2,400", unit: "/kg", change: "+2.4%", positive: true },
-            { crop: "Maize", price: "650", unit: "/kg", change: "-0.8%", positive: false },
-            { crop: "Dry Beans", price: "900", unit: "/kg", change: "+1.1%", positive: true },
-        ];
+        const marketPayload = await getMarketPayload();
 
         const dashboardData = {
             totalEarnings,
             earningsChange,
             activeBatches,
-            marketPrices,
+            marketPrices: marketPayload.marketPrices.map((item) => ({
+                crop: item.crop,
+                price: item.price,
+                unit: item.unit,
+                change: item.change,
+                positive: item.positive,
+            })),
             lastSynced: new Date().toISOString(),
         };
 
         return res.status(200).json(success(dashboardData));
     } catch (error) {
         console.error("Dashboard error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
+const getMarket = async (req, res) => {
+    try {
+        const marketPayload = await getMarketPayload();
+        return res.status(200).json(success(marketPayload));
+    } catch (error) {
+        console.error("Market data error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
+const _formatWalletActivityTitle = (batch) => {
+    const names = (batch.products || [])
+        .map((entry) => entry?.product?.name)
+        .filter(Boolean);
+
+    if (names.length === 0) {
+        return batch.status === "sold" ? "Produce Payout" : "Produce Delivery Payment";
+    }
+
+    if (names.length === 1) {
+        return batch.status === "sold"
+            ? `${names[0]} Payout`
+            : `${names[0]} Delivery Payment`;
+    }
+
+    return batch.status === "sold" ? "Mixed Produce Payout" : "Mixed Produce Delivery Payment";
+};
+
+const getWallet = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const [soldBatches, activeBatches, recentBatches] = await Promise.all([
+            Batch.find({ farmer: userId, status: "sold" })
+                .populate("products.product", "name")
+                .sort({ soldAt: -1, createdAt: -1 }),
+            Batch.find({ farmer: userId, status: "active" })
+                .populate("products.product", "name")
+                .sort({ createdAt: -1 }),
+            Batch.find({ farmer: userId, status: { $in: ["sold", "active"] } })
+                .populate("products.product", "name")
+                .sort({ soldAt: -1, createdAt: -1 })
+                .limit(10),
+        ]);
+
+        const totalEarned = soldBatches.reduce((sum, batch) => sum + (Number(batch.totalPrice) || 0), 0);
+        const pendingPayout = activeBatches.reduce((sum, batch) => sum + (Number(batch.totalPrice) || 0), 0);
+
+        // No withdrawal ledger exists yet; available balance mirrors earned payouts.
+        const availableBalance = totalEarned;
+
+        const recentActivity = recentBatches.map((batch) => {
+            const isSold = batch.status === "sold";
+            const amount = Number(batch.totalPrice) || 0;
+            const occurredAt = isSold && batch.soldAt ? batch.soldAt : batch.createdAt;
+
+            return {
+                id: String(batch._id),
+                title: _formatWalletActivityTitle(batch),
+                amount,
+                direction: "credit",
+                status: isSold ? "completed" : "processing",
+                reference: `Batch ${String(batch._id).slice(-6).toUpperCase()}`,
+                occurredAt: occurredAt ? new Date(occurredAt).toISOString() : new Date().toISOString(),
+            };
+        });
+
+        const walletData = {
+            currency: "RWF",
+            availableBalance,
+            totalEarned,
+            pendingPayout,
+            recentActivity,
+            lastSynced: new Date().toISOString(),
+        };
+
+        return res.status(200).json(success(walletData));
+    } catch (error) {
+        console.error("Wallet error:", error);
         return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
     }
 };
@@ -230,6 +314,8 @@ const scanQuality = async (req, res) => {
 
 module.exports = {
     getDashboard,
+    getMarket,
+    getWallet,
     getInventory,
     addProduct,
     createBatch,

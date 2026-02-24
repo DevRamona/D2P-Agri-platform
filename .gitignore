@@ -16,6 +16,8 @@ frontend/vite.config.d.ts
 *.png
 __pycache__/
 *.pyc
+ml-models/
+ml-service/artifacts/
 
 # User Uploads
 backend/uploads/

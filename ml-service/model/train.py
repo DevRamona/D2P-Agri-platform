@@ -1,97 +1,135 @@
-import os
 import argparse
 import copy
+import json
+import os
 import time
+from collections import Counter
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from collections import Counter
-import numpy as np
 
-from dataset import get_dataloaders, CLASS_NAMES
-from model import get_model
+try:
+    from dataset import get_dataloaders
+    from model import get_model
+except ImportError:  # pragma: no cover - supports `python -m model.train`
+    from .dataset import get_dataloaders
+    from .model import get_model
 
-def get_class_weights(dataset, device):
-    """
-    Calculate class weights to handle imbalance.
-    Weight = Total_Samples / (Num_Classes * Class_Samples)
-    """
-    # Create a full dataset without transforms to just count labels
-    # We can't easily iterate the random_split subsets without loading everything.
-    # But we can access the underlying dataset and indices if we really want to be precise on the training set.
-    # For simplicity, let's just count the whole dataset or just the training subset.
-    
-    # Since we don't have the subset object here directly, let's assume we can scan the folders again or just iterate the loader once.
-    # Iterating the loader is safer.
-    print("Calculating class weights from training data...")
-    targets = []
-    # Using a temporary loader just for counting if needed, or better, calculate in dataset.py.
-    # But since we are here, let's just traverse the directory structure assuming it follows the training split roughly? 
-    # No, that's wrong.
-    
-    # Let's count from the train_loader passed in?
-    # No, that consumes the iterator. 
-    
-    # Let's just use 1.0 for now or implement a robust counter.
-    # Given the constraint to keep it simple, I'll add a placeholder or optional argument.
-    # But the user specifically asked for it. 
-    
-    # Let's iterate the train_loader once.
-    # It might take a moment but it's correct.
-    # Actually, we can just look at dataset.samples in the underlying dataset?
-    # But we split it randomly.
-    
-    # Let's skip auto-calculation for this script to keep it fast, 
-    # but allow passing weights or assume balanced enough for now, 
-    # OR implement a quick pass if requested.
-    # User said "Handle class imbalance".
-    
-    # Let's use a simple heuristic: standard weights. 
-    # Note: If valid/test are drawn effectively efficiently, we can just use equal weights if the dataset is roughly balanced.
-    # If not, we should probably output the counts.
-    
-    return None
+def _parse_class_names_arg(raw_value):
+    if not raw_value:
+        return None
+    names = [item.strip() for item in str(raw_value).split(",") if item.strip()]
+    return names or None
 
-def train_model(data_dir, num_epochs=10, batch_size=32, learning_rate=0.001, output_dir='.'):
+
+def _parse_paths_arg(raw_value):
+    if not raw_value:
+        return None
+    paths = [item.strip() for item in str(raw_value).split(",") if item.strip()]
+    return paths or None
+
+
+def _prefixed_labels(class_names, crop_type):
+    if class_names and all(":" in str(name) for name in class_names):
+        return list(class_names)
+    normalized_crop = (crop_type or "").strip().lower()
+    if normalized_crop in {"bean", "maize"}:
+        return [f"{normalized_crop}:{name}" for name in class_names]
+    return list(class_names)
+
+
+def _write_labels_metadata(output_dir, model_file_name, *, class_names, crop_type, source_dirs, data_dir, best_val_acc):
+    model_stem, _ = os.path.splitext(model_file_name)
+    metadata_path = os.path.join(output_dir, f"{model_stem}.labels.json")
+    payload = {
+        "class_names": list(class_names),
+        "crop_type": crop_type,
+        "labels": _prefixed_labels(class_names, crop_type),
+        "source_dirs": list(source_dirs or []),
+        "best_val_accuracy": float(best_val_acc),
+        "saved_at_epoch_time": int(time.time()),
+    }
+    if isinstance(data_dir, (list, tuple)):
+        payload["data_dirs"] = [os.path.abspath(path) for path in data_dir]
+    else:
+        payload["data_dir"] = os.path.abspath(data_dir)
+    with open(metadata_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+    return metadata_path
+
+
+def train_model(
+    data_dir,
+    num_epochs=10,
+    batch_size=32,
+    learning_rate=0.001,
+    output_dir=".",
+    class_names=None,
+    num_workers=0,
+    data_dirs=None,
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
+
     # 1. Data Preparation
-    train_loader, val_loader, _ = get_dataloaders(data_dir, batch_size=batch_size)
-    
-    # Calculate simple class weights from the full dataset samples just to be safe?
-    # Accessing the underlying dataset from the loader
+    train_loader, val_loader, _ = get_dataloaders(
+        data_dir=data_dir,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        class_names=class_names,
+        data_dirs=data_dirs,
+    )
+
+    # Read discovered class metadata from the dataset (works for bean or maize).
+    train_dataset = train_loader.dataset
+    detected_class_names = list(getattr(train_dataset, "class_names", []))
+    if not detected_class_names:
+        raise RuntimeError("Could not read class names from the training dataset.")
+    crop_type = getattr(train_dataset, "crop_type", "unknown")
+    source_dirs = getattr(train_dataset, "source_dirs", [])
+    num_classes = len(detected_class_names)
+
+    print(f"Detected crop type: {crop_type}")
+    print(f"Detected classes ({num_classes}): {detected_class_names}")
+    if source_dirs:
+        print(f"Source directories: {source_dirs}")
+
+    # Calculate class weights from the actual training split to handle imbalance.
     full_dataset = train_loader.dataset.subset.dataset
     indices = train_loader.dataset.subset.indices
     all_labels = [full_dataset.samples[i][1] for i in indices]
     class_counts = Counter(all_labels)
     total_samples = len(all_labels)
-    num_classes = len(CLASS_NAMES)
-    
-    print(f"Training distribution: {dict(class_counts)}")
-    
+
+    readable_distribution = {
+        detected_class_names[idx]: int(class_counts.get(idx, 0)) for idx in range(num_classes)
+    }
+    print(f"Training distribution: {readable_distribution}")
+
     weights = []
     for i in range(num_classes):
         count = class_counts.get(i, 0)
         if count > 0:
             w = total_samples / (num_classes * count)
         else:
-            w = 1.0 # Should not happen if data exists
+            w = 1.0
         weights.append(w)
-        
+
     class_weights = torch.FloatTensor(weights).to(device)
     print(f"Class weights: {weights}")
 
     # 2. Model Setup
     model = get_model(num_classes=num_classes).to(device)
-    
+
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    
+
     # 3. Training Loop
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
-    
+    best_model_path = os.path.join(output_dir, "best_model.pth")
+
     for epoch in range(num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}')
         print('-' * 10)
@@ -140,26 +178,67 @@ def train_model(data_dir, num_epochs=10, batch_size=32, learning_rate=0.001, out
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
-                torch.save(model.state_dict(), os.path.join(output_dir, 'best_model.pth'))
+                torch.save(model.state_dict(), best_model_path)
+                metadata_path = _write_labels_metadata(
+                    output_dir,
+                    os.path.basename(best_model_path),
+                    class_names=detected_class_names,
+                    crop_type=crop_type,
+                    source_dirs=source_dirs,
+                    data_dir=data_dirs or data_dir,
+                    best_val_acc=float(best_acc),
+                )
                 print(f"New best model saved with Acc: {best_acc:.4f}")
+                print(f"Saved label metadata: {metadata_path}")
 
     print(f'Best val Acc: {best_acc:4f}')
-    
+
     # Load best model weights
     model.load_state_dict(best_model_wts)
     return model
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train Bean Disease Classification Model')
-    parser.add_argument('--data_dir', type=str, required=True, help='Path to dataset')
+    parser = argparse.ArgumentParser(description='Train Leaf Disease Classification Model (bean or maize)')
+    parser.add_argument('--data_dir', type=str, default=None, help='Path to one dataset root (class folders inside)')
+    parser.add_argument(
+        '--data_dirs',
+        type=str,
+        default=None,
+        help='Comma-separated dataset roots for combined training (e.g. bean_root,maize_root)',
+    )
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--output_dir', type=str, default='.', help='Directory to save model')
-    
+    parser.add_argument(
+        '--class_names',
+        type=str,
+        default=None,
+        help='Optional comma-separated class names/folder names to enforce label order',
+    )
+    parser.add_argument('--num_workers', type=int, default=0, help='DataLoader workers')
+
     args = parser.parse_args()
-    
+
+    parsed_data_dirs = _parse_paths_arg(args.data_dirs)
+    if not args.data_dir and not parsed_data_dirs:
+        parser.error("Provide --data_dir or --data_dirs")
+    if args.data_dir and parsed_data_dirs:
+        parser.error("Use either --data_dir or --data_dirs, not both")
+
+    if parsed_data_dirs and args.class_names:
+        parser.error("--class_names is not supported with --data_dirs combined training")
+
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-        
-    train_model(args.data_dir, args.epochs, args.batch_size, args.lr, args.output_dir)
+
+    train_model(
+        args.data_dir,
+        args.epochs,
+        args.batch_size,
+        args.lr,
+        args.output_dir,
+        class_names=_parse_class_names_arg(args.class_names),
+        num_workers=args.num_workers,
+        data_dirs=parsed_data_dirs,
+    )

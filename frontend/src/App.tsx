@@ -3,11 +3,12 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-
 import Auth from "./components/Auth";
 import FarmerDashboard from "./components/FarmerDashboard";
 import ProduceInventory from "./components/ProduceInventory";
+import FarmerMarket from "./components/FarmerMarket";
 import QualityScan from "./components/QualityScan";
-import AIDiagnosis from "./components/AIDiagnosis";
 import BatchCreation from "./components/BatchCreation";
 import BatchTracker from "./components/BatchTracker";
 import Wallet from "./components/Wallet";
+import FarmerProfile from "./components/FarmerProfile";
 import BuyerMarketplace from "./components/BuyerMarketplace";
 import BuyerBatchDetails from "./components/BuyerBatchDetails";
 import OrderReview from "./components/OrderReview";
@@ -150,11 +151,12 @@ const App = () => {
             element={<FarmerDashboard onLogout={handleLogout} onNavigate={(view) => navigate(`/farmer/${view}`)} />}
           />
           <Route path="/farmer/inventory" element={<ProduceInventory onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
+          <Route path="/farmer/market" element={<FarmerMarket onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/quality-scan" element={<QualityScan onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
-          <Route path="/farmer/ai-diagnosis" element={<AIDiagnosis onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-creation" element={<BatchCreation onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-tracker/:id" element={<BatchTracker onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/wallet" element={<Wallet onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
+          <Route path="/farmer/profile" element={<FarmerProfile onNavigate={(view) => navigate(`/farmer/${view}`)} onLogout={handleLogout} />} />
 
           {/* Buyer Routes */}
           <Route
