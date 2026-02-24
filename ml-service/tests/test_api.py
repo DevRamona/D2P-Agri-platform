@@ -1,15 +1,42 @@
 import io
-import os
+from typing import Any
+from unittest.mock import patch
 
+import numpy as np
 from PIL import Image
 from fastapi.testclient import TestClient
 
-os.environ["MOCK_MODEL"] = "true"
-
-from app.api import app  
+from app.inference import BaseDiseaseModel, DiseaseInferenceService
 
 
-client = TestClient(app)
+class StubDiseaseModel(BaseDiseaseModel):
+    """Minimal in-process stub used only in tests — no file I/O, no PyTorch."""
+
+    model_version = "stub-v1"
+
+    def load_model(self) -> None:
+        return None
+
+    def preprocess(self, image: Image.Image) -> np.ndarray:
+        arr = np.asarray(image.resize((224, 224)), dtype=np.float32) / 255.0
+        return arr
+
+    def predict(
+        self,
+        image_tensor: Any,
+        *,
+        crop_hint: str = "auto",
+        raw_bytes: bytes | None = None,
+    ) -> dict[str, Any]:
+        return {"cropType": "maize", "disease": "healthy", "confidence": 0.92}
+
+
+_stub_service = DiseaseInferenceService(model=StubDiseaseModel())
+
+from app.api import app  # noqa: E402
+
+with patch("app.api.inference_service", _stub_service):
+    client = TestClient(app)
 
 
 def _make_image_bytes(color: tuple[int, int, int]) -> bytes:

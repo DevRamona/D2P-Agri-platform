@@ -1,4 +1,3 @@
-import hashlib
 import io
 import json
 import os
@@ -11,15 +10,6 @@ from typing import Any, Iterable
 import numpy as np
 from PIL import Image
 
-
-MAIZE_DISEASES = ["healthy", "common_rust", "gray_leaf_spot", "northern_leaf_blight"]
-BEAN_DISEASES = ["healthy", "bean_rust", "angular_leaf_spot", "anthracnose"]
-
-
-def _as_bool(value: str | None, default: bool = False) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _normalize_crop_hint(crop_hint: str | None) -> str:
@@ -61,52 +51,6 @@ class BaseDiseaseModel(ABC):
         raw_bytes: bytes | None = None,
     ) -> dict[str, Any]:
         raise NotImplementedError
-
-
-class MockDiseaseModel(BaseDiseaseModel):
-    model_version = "mock-v1"
-
-    def load_model(self) -> None:
-        return None
-
-    def preprocess(self, image: Image.Image) -> np.ndarray:
-        return _normalize_array(image)
-
-    def predict(
-        self,
-        image_tensor: np.ndarray,
-        *,
-        crop_hint: str = "auto",
-        raw_bytes: bytes | None = None,
-    ) -> dict[str, Any]:
-        digest = hashlib.sha256(raw_bytes or image_tensor.tobytes()).hexdigest()
-        seed = int(digest[:16], 16)
-
-        mean_green = float(image_tensor[..., 1].mean())
-        contrast = float(image_tensor.std())
-        normalized_hint = _normalize_crop_hint(crop_hint)
-
-        if normalized_hint == "auto":
-            crop_type = "maize" if (seed % 2 == 0) else "bean"
-        else:
-            crop_type = "bean" if normalized_hint == "beans" else normalized_hint
-
-        disease_options = MAIZE_DISEASES if crop_type == "maize" else BEAN_DISEASES
-
-        if mean_green > 0.45 and contrast < 0.22:
-            disease = "healthy"
-        else:
-            disease = disease_options[seed % len(disease_options)]
-
-        confidence_base = 0.55 + ((seed % 30) / 100.0)  # 0.55 - 0.84
-        confidence_adjustment = min(0.12, max(-0.1, (contrast - 0.18)))
-        confidence = float(np.clip(confidence_base + confidence_adjustment, 0.51, 0.94))
-
-        return {
-            "cropType": crop_type,
-            "disease": disease,
-            "confidence": confidence,
-        }
 
 
 class TorchDiseaseModel(BaseDiseaseModel):
@@ -181,7 +125,7 @@ class TorchDiseaseModel(BaseDiseaseModel):
 
     def _validate_labels(self) -> None:
         if not self.labels:
-            raise RuntimeError("MODEL_LABELS is required when MOCK_MODEL=false (format: crop:disease,crop:disease,...)")
+            raise RuntimeError("MODEL_LABELS is required (format: crop:disease,crop:disease,...) e.g. maize:healthy,maize:common_rust")
 
         available_crops: set[str] = set()
         for label in self.labels:
@@ -232,7 +176,7 @@ class TorchDiseaseModel(BaseDiseaseModel):
 
     def load_model(self) -> None:
         if not self.model_path:
-            raise RuntimeError("MODEL_PATH is required when MOCK_MODEL=false")
+            raise RuntimeError("MODEL_PATH is required — set it to the path of your trained .pth model file")
         self._load_labels_from_sidecar()
         self._infer_default_labels_if_missing()
         self._validate_labels()
@@ -356,8 +300,7 @@ class ImageQualityChecker:
 
 class DiseaseInferenceService:
     def __init__(self, model: BaseDiseaseModel | None = None):
-        self.mock_mode = _as_bool(os.getenv("MOCK_MODEL"), default=False)
-        self.model = model or (MockDiseaseModel() if self.mock_mode else TorchDiseaseModel())
+        self.model = model or TorchDiseaseModel()
         self.quality_checker = ImageQualityChecker()
         self.model.load_model()
 

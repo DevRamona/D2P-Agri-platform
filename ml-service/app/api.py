@@ -1,4 +1,3 @@
-import os
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -28,7 +27,6 @@ def read_root():
     return {
         "service": "crop-disease-inference",
         "status": "ok",
-        "mockModel": str(os.getenv("MOCK_MODEL", "false")).lower() in {"1", "true", "yes", "on"},
     }
 
 
