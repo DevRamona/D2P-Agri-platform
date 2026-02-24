@@ -1,25 +1,112 @@
-﻿import type { ViewMode } from "../types";
+import { useEffect, useRef, useState } from "react";
+import type { ViewMode } from "../types";
+import {
+  analyzeDiseaseImages,
+  type CropHint,
+  type DiseaseAnalysisResult,
+  type RecommendationLanguage,
+} from "../api/disease";
+import CameraCapture from "./quality-scan/CameraCapture";
+import UploadAnalyzer from "./quality-scan/UploadAnalyzer";
+import ResultsPanel from "./quality-scan/ResultsPanel";
 
 interface QualityScanProps {
   onNavigate?: (view: ViewMode) => void;
 }
 
-const QualityScan = ({ onNavigate }: QualityScanProps) => {
-  return (
-    <section className="relative w-full max-w-[520px] overflow-hidden rounded-[32px] bg-[var(--surface)] shadow-[var(--shadow)]">
-      <img
-        src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1400&q=80"
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-        loading="lazy"
-      />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,12,6,0.75),rgba(8,12,6,0.35)_45%,rgba(8,12,6,0.9))]" />
+type ScanTab = "camera" | "upload";
 
-      <div className="relative z-10 flex min-h-[780px] flex-col px-6 pb-8 pt-6">
-        <header className="flex items-center justify-between">
+const QualityScan = ({ onNavigate }: QualityScanProps) => {
+  const [activeTab, setActiveTab] = useState<ScanTab>("camera");
+  const [cropHint, setCropHint] = useState<CropHint>("auto");
+  const [language, setLanguage] = useState<RecommendationLanguage>("en");
+  const [results, setResults] = useState<DiseaseAnalysisResult[]>([]);
+  const [previewByImageId, setPreviewByImageId] = useState<Record<string, string>>({});
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [lastMode, setLastMode] = useState<string | null>(null);
+  const previewUrlsRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    previewUrlsRef.current = previewByImageId;
+  }, [previewByImageId]);
+
+  useEffect(
+    () => () => {
+      Object.values(previewUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    },
+    [],
+  );
+
+  const handleAnalyze = async (images: File[], mode: "camera" | "upload" | "live") => {
+    if (images.length === 0) {
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setRequestError(null);
+    setLastMode(mode);
+
+    try {
+      const nextResults = await analyzeDiseaseImages({
+        images,
+        cropHint,
+        mode,
+      });
+
+      const newPreviews: Record<string, string> = {};
+      nextResults.forEach((result, index) => {
+        const file = images[index];
+        if (file) {
+          newPreviews[result.imageId] = URL.createObjectURL(file);
+        }
+      });
+
+      setPreviewByImageId((current) => {
+        if (mode !== "live") {
+          Object.values(current).forEach((url) => URL.revokeObjectURL(url));
+          return newPreviews;
+        }
+
+        const merged = { ...current, ...newPreviews };
+        const orderedIds = [...nextResults.map((item) => item.imageId), ...Object.keys(current)];
+        const cappedIds = orderedIds.filter((id, idx, arr) => arr.indexOf(id) === idx).slice(0, 10);
+        Object.keys(merged).forEach((id) => {
+          if (!cappedIds.includes(id)) {
+            URL.revokeObjectURL(merged[id]);
+            delete merged[id];
+          }
+        });
+        return merged;
+      });
+
+      setResults((current) => {
+        if (mode !== "live") {
+          return nextResults;
+        }
+        const merged = [...nextResults, ...current];
+        const uniqueById = new Map<string, DiseaseAnalysisResult>();
+        for (const item of merged) {
+          if (!uniqueById.has(item.imageId)) {
+            uniqueById.set(item.imageId, item);
+          }
+        }
+        return Array.from(uniqueById.values()).slice(0, 10);
+      });
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "Analysis request failed.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <section className="w-full max-w-[700px] animate-[rise_0.6s_ease_both] pb-8">
+      <div className="rounded-[28px] border border-[var(--stroke)] bg-[linear-gradient(180deg,var(--surface),rgba(255,255,255,0.02))] p-5 shadow-[var(--shadow)]">
+        <header className="flex items-start justify-between gap-4">
           <button
             type="button"
-            className="grid h-11 w-11 place-items-center rounded-full bg-black/30 text-white"
+            className="grid h-11 w-11 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
             onClick={() => onNavigate?.("dashboard")}
             aria-label="Go back"
           >
@@ -27,109 +114,109 @@ const QualityScan = ({ onNavigate }: QualityScanProps) => {
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <div className="text-center">
-            <p className="m-0 text-lg font-semibold text-white">AI Quality Scan</p>
-            <div className="mt-2 flex items-center justify-center gap-1">
-              {Array.from({ length: 7 }).map((_, index) => (
-                <span
-                  key={index}
-                  className={`h-2 w-2 rounded-full ${index === 2 ? "w-5 bg-[var(--accent)]" : "bg-white/30"}`}
-                />
+
+          <div className="flex-1">
+            <p className="m-0 text-xs font-semibold tracking-[2px] text-[var(--muted)]">QUALITY SCAN</p>
+            <h1 className="m-0 mt-1 text-2xl font-semibold">Crop Disease Scanner</h1>
+            <p className="m-0 mt-2 text-sm text-[var(--muted)]">
+              Scan maize or bean leaves using your webcam or uploaded images, then request LLM recommendations.
+            </p>
+          </div>
+        </header>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="m-0 text-xs font-semibold tracking-[1px] text-[var(--muted)]">Input Mode</p>
+            <div className="mt-2 inline-flex rounded-xl border border-[var(--stroke)] bg-[var(--surface-2)] p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab("camera")}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                  activeTab === "camera" ? "bg-[var(--accent)] text-[#0b1307]" : "text-[var(--text)]"
+                }`}
+              >
+                Use Camera
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("upload")}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                  activeTab === "upload" ? "bg-[var(--accent)] text-[#0b1307]" : "text-[var(--text)]"
+                }`}
+              >
+                Upload Images
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="m-0 text-xs font-semibold tracking-[1px] text-[var(--muted)]">Crop Hint</p>
+            <div className="mt-2 inline-flex rounded-xl border border-[var(--stroke)] bg-[var(--surface-2)] p-1">
+              {[
+                { label: "Auto", value: "auto" },
+                { label: "Maize", value: "maize" },
+                { label: "Beans", value: "beans" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setCropHint(option.value as CropHint)}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                    cropHint === option.value ? "bg-[var(--surface)]" : "text-[var(--muted)]"
+                  }`}
+                >
+                  {option.label}
+                </button>
               ))}
             </div>
           </div>
-          <button
-            type="button"
-            className="grid h-11 w-11 place-items-center rounded-full bg-black/30 text-white"
-            aria-label="Help"
-          >
-            <span className="text-lg font-semibold">?</span>
-          </button>
-        </header>
-
-        <div className="mt-8 text-center">
-          <h1 className="m-0 text-3xl font-semibold text-white">Scan Maize Kernels</h1>
-          <p className="mt-2 text-sm text-white/70">Keep the camera steady within frame</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-[#0b1307] shadow-[0_12px_24px_rgba(73,197,26,0.35)]">
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-white/90 text-[var(--accent)]">
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 12l4 4 10-10" />
-              </svg>
-            </span>
-            Ideal Distance
-          </div>
         </div>
 
-        <div className="relative mt-8 flex-1">
-          <div className="absolute inset-0">
-            <span className="absolute left-2 top-2 h-8 w-8 border-l-4 border-t-4 border-[var(--accent)]" />
-            <span className="absolute right-2 top-2 h-8 w-8 border-r-4 border-t-4 border-[var(--accent)]" />
-            <span className="absolute left-2 bottom-2 h-8 w-8 border-b-4 border-l-4 border-[var(--accent)]" />
-            <span className="absolute right-2 bottom-2 h-8 w-8 border-b-4 border-r-4 border-[var(--accent)]" />
-            <span className="absolute left-[30%] top-[35%] h-4 w-4 rounded-full border-2 border-[var(--accent)]" />
-            <span className="absolute left-[45%] top-[55%] h-4 w-4 rounded-full border-2 border-[var(--accent)]" />
-            <span className="absolute left-[60%] top-[60%] h-4 w-4 rounded-full border-2 border-[var(--accent)]" />
-          </div>
+        <div className="mt-5">
+          {activeTab === "camera" ? (
+            <CameraCapture onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} />
+          ) : (
+            <UploadAnalyzer onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} />
+          )}
         </div>
 
-        <div className="mt-6 flex items-center justify-between gap-4">
-          <button className="grid h-12 w-12 place-items-center rounded-full bg-black/40 text-white" aria-label="Flash">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M7 2h10l-4 7h4l-8 13 2-9H7z" />
-            </svg>
-          </button>
-          <div className="flex-1 rounded-full bg-black/40 p-1">
-            <div className="grid grid-cols-2">
-              <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[#0b1307]">
-                Maize
-              </button>
-              <button className="rounded-full px-4 py-2 text-xs font-semibold text-white/70">Beans</button>
+        <div className="mt-5 rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="m-0 text-sm font-semibold">Analysis Status</p>
+              <p className="m-0 mt-1 text-xs text-[var(--muted)]">
+                {isAnalyzing
+                  ? "Sending image(s) to disease inference service..."
+                  : lastMode
+                    ? `Last run completed via ${lastMode} mode.`
+                    : "Ready to analyze leaf images."}
+              </p>
             </div>
-          </div>
-          <button className="grid h-12 w-12 place-items-center rounded-full bg-black/40 text-white" aria-label="Mute">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M11 5L6 9H3v6h3l5 4V5z" />
-              <path d="M16 9l5 5" />
-              <path d="M21 9l-5 5" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="mt-4 flex items-center justify-center">
-          <button
-            type="button"
-            className="relative grid h-20 w-20 place-items-center rounded-full bg-white/90"
-            aria-label="Capture"
-            onClick={() => onNavigate?.("ai-diagnosis")}
-          >
-            <span className="absolute inset-1 rounded-full border-[6px] border-[var(--accent)]" />
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-white">
-              <span className="h-3 w-3 rounded-full bg-[var(--accent)]" />
+            <span
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${
+                isAnalyzing ? "bg-amber-500/10 text-amber-200" : "bg-emerald-500/10 text-emerald-200"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${isAnalyzing ? "bg-amber-300" : "bg-emerald-300"}`} />
+              {isAnalyzing ? "Analyzing" : "Idle"}
             </span>
-          </button>
-        </div>
+          </div>
 
-        <div className="mt-6 rounded-[22px] border border-white/10 bg-black/40 p-4 text-white/80">
-          <div className="flex items-center justify-between">
-            <p className="m-0 text-xs font-semibold tracking-[2px] text-white/70">Real-time Analysis</p>
-            <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
-              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
-              On-device AI Active
+          {requestError && (
+            <div className="mt-3 rounded-xl border border-red-300/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {requestError}
             </div>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {[
-              { label: "Moisture", value: "13.5%" },
-              { label: "Pests", value: "None" },
-              { label: "Color", value: "Grade A" },
-            ].map((item) => (
-              <div key={item.label} className="rounded-[16px] border border-white/10 bg-white/10 px-3 py-3">
-                <p className="m-0 text-[10px] text-white/60">{item.label}</p>
-                <p className="m-0 mt-2 text-sm font-semibold text-white">{item.value}</p>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
+      </div>
+
+      <div className="mt-6">
+        <ResultsPanel
+          results={results}
+          previewByImageId={previewByImageId}
+          language={language}
+          onLanguageChange={setLanguage}
+        />
       </div>
     </section>
   );

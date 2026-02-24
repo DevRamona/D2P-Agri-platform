@@ -4,7 +4,6 @@ import Auth from "./components/Auth";
 import FarmerDashboard from "./components/FarmerDashboard";
 import ProduceInventory from "./components/ProduceInventory";
 import QualityScan from "./components/QualityScan";
-import AIDiagnosis from "./components/AIDiagnosis";
 import BatchCreation from "./components/BatchCreation";
 import BatchTracker from "./components/BatchTracker";
 import Wallet from "./components/Wallet";
@@ -151,7 +150,6 @@ const App = () => {
           />
           <Route path="/farmer/inventory" element={<ProduceInventory onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/quality-scan" element={<QualityScan onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
-          <Route path="/farmer/ai-diagnosis" element={<AIDiagnosis onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-creation" element={<BatchCreation onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/batch-tracker/:id" element={<BatchTracker onNavigate={(view) => navigate(`/farmer/${view}`)} />} />
           <Route path="/farmer/wallet" element={<Wallet onNavigate={(view) => navigate(`/farmer/${view}`)} />} />

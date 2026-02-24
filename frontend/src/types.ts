@@ -6,7 +6,6 @@ export type ViewMode =
   | "dashboard"
   | "inventory"
   | "quality-scan"
-  | "ai-diagnosis"
   | "batch-creation"
   | "batch-tracker"
   | "wallet"
