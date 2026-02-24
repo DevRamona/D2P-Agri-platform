@@ -19,7 +19,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
     const loadData = async () => {
       try {
         const result = await getDashboard();
-        setData(result as unknown as DashboardData);
+        setData(result);
       } catch (err) {
         console.error("Failed to load dashboard", err);
       } finally {
@@ -223,9 +223,11 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
               {/* Display image of the first product if available */}
               <div className="relative h-16 w-16 flex-shrink-0 rounded-[12px] bg-[var(--surface-2)] overflow-hidden">
                 {(() => {
-                  // @ts-ignore
                   const firstProduct = batch.products?.[0]?.product;
-                  let imageUrl = (firstProduct as any)?.image;
+                  let imageUrl =
+                    typeof firstProduct === "object" && firstProduct !== null && "image" in firstProduct
+                      ? firstProduct.image
+                      : undefined;
 
                   // Handle relative paths from backend uploads
                   if (imageUrl && imageUrl.startsWith('/uploads')) {
@@ -248,9 +250,11 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
               </div>
 
               <div className="flex flex-col justify-center">
-                {batch.products?.slice(0, 2).map((p: any, idx: number) => (
+                {batch.products?.slice(0, 2).map((p, idx: number) => (
                   <div key={idx} className="text-xs text-[var(--text)]">
-                    <span className="font-semibold">{p.product?.name || "Crop"}</span>
+                    <span className="font-semibold">
+                      {typeof p.product === "object" && p.product !== null ? p.product.name : "Crop"}
+                    </span>
                     <span className="text-[var(--muted)]"> • {p.quantity} kg</span>
                   </div>
                 ))}
@@ -295,6 +299,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
           {
             label: "Market",
             active: false,
+            target: "market" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M4 19V5" />
@@ -307,6 +312,7 @@ const FarmerDashboard = ({ onLogout, onNavigate }: FarmerDashboardProps) => {
           {
             label: "Profile",
             active: false,
+            target: "profile" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <circle cx="12" cy="8" r="4" />

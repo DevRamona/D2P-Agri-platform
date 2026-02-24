@@ -25,7 +25,6 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
   const loadInventory = async () => {
     try {
       const result = await getInventory();
-      // @ts-ignore
       setStockItems(result || []);
     } catch (err) {
       console.error("Failed to load inventory", err);
@@ -317,6 +316,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
           {
             label: "Market",
             active: false,
+            target: "market" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M4 19V5" />
@@ -329,6 +329,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
           {
             label: "Advice",
             active: false,
+            target: "quality-scan" as const,
             icon: (
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4" />
