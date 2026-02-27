@@ -16,7 +16,7 @@ const parseExpiry = (value) => {
 };
 
 class AuthService {
-  async register({ fullName, phoneNumber, email, password, role }) {
+  async register({ fullName, phoneNumber, email, password, role, adminInviteCode }) {
     const existing = await User.findOne({
       $or: [
         { phoneNumber: phoneNumber || "" },
@@ -30,6 +30,16 @@ class AuthService {
       }
       if (email && existing.email === email) {
         throw { code: "CONFLICT", message: "Email already in use" };
+      }
+    }
+
+    if (String(role).toUpperCase() === "ADMIN") {
+      const expectedInvite = process.env.ADMIN_INVITE_CODE || "";
+      if (!expectedInvite) {
+        throw { code: "FORBIDDEN", message: "Admin registration is disabled. ADMIN_INVITE_CODE is not configured." };
+      }
+      if (String(adminInviteCode || "") !== expectedInvite) {
+        throw { code: "FORBIDDEN", message: "Invalid admin invite code" };
       }
     }
 

@@ -15,6 +15,9 @@ import OrderReview from "./components/OrderReview";
 import OrderTracking from "./components/OrderTracking";
 import BuyerOrderHistory from "./components/BuyerOrderHistory";
 import BuyerProfile from "./components/BuyerProfile";
+import AdminEscrowAudit from "./components/admin/AdminEscrowAudit";
+import AdminHubDisputes from "./components/admin/AdminHubDisputes";
+import AdminOverview from "./components/admin/AdminOverview";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole } from "./types";
 import { logout, fromApiRole, type ApiUser } from "./api/auth";
@@ -44,6 +47,14 @@ const App = () => {
   const [isRestoring, setIsRestoring] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const currentStoredUser = getStoredUser() as ApiUser | null;
+  const currentUserRole: UserRole | null = currentStoredUser ? fromApiRole(currentStoredUser.role) : null;
+
+  const routeForRole = (role: UserRole) => {
+    if (role === "farmer") return "/farmer/dashboard";
+    if (role === "buyer") return "/buyer/marketplace";
+    return "/admin/overview";
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -59,7 +70,7 @@ const App = () => {
       if (storedUser && refreshToken) {
         const userRole = fromApiRole(storedUser.role);
         if (location.pathname === "/" || location.pathname.startsWith("/auth")) {
-          navigate(userRole === "farmer" ? "/farmer/dashboard" : "/buyer/marketplace");
+          navigate(routeForRole(userRole));
         }
       }
       setIsRestoring(false);
@@ -89,7 +100,7 @@ const App = () => {
     if (user) {
       setStoredUser(user);
     }
-    navigate(nextRole === "farmer" ? "/farmer/dashboard" : "/buyer/marketplace");
+    navigate(routeForRole(nextRole));
   };
 
   const handleNavigateToAuth = (tab: "login" | "register") => {
@@ -101,28 +112,38 @@ const App = () => {
     navigate(`/buyer/${normalized}`);
   };
 
+  const navigateAdminView = (view: string) => {
+    const normalized = view.startsWith("admin-") ? view.slice("admin-".length) : view;
+    navigate(`/admin/${normalized}`);
+  };
+
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const adminRouteFallback = currentUserRole ? routeForRole(currentUserRole) : "/auth/login";
+
   if (isRestoring) {
     return null; // Or a loading spinner
   }
 
   return (
-    <div className="min-h-screen px-6 py-6 sm:px-10 sm:py-8 lg:px-12 lg:py-10 flex flex-col gap-6 sm:gap-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <span className="font-display text-[clamp(20px,2.4vw,28px)] font-bold tracking-[0.3px]">
-            IsokoLink
-          </span>
-          <span className="text-sm text-[var(--muted)]">Secure trade for Rwanda's farmers and buyers</span>
-        </div>
-        <button
-          type="button"
-          className="rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:-translate-y-0.5"
-          onClick={toggleTheme}
-          aria-pressed={theme === "dark"}
-        >
-          {theme === "dark" ? "Light mode" : "Dark mode"}
-        </button>
-      </header>
+    <div className={`min-h-screen flex flex-col ${isAdminRoute ? "px-4 py-4 sm:px-6 sm:py-6 gap-4" : "px-6 py-6 sm:px-10 sm:py-8 lg:px-12 lg:py-10 gap-6 sm:gap-8"}`}>
+      {!isAdminRoute && (
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="font-display text-[clamp(20px,2.4vw,28px)] font-bold tracking-[0.3px]">
+              IsokoLink
+            </span>
+            <span className="text-sm text-[var(--muted)]">Secure trade for Rwanda's farmers and buyers</span>
+          </div>
+          <button
+            type="button"
+            className="rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:-translate-y-0.5"
+            onClick={toggleTheme}
+            aria-pressed={theme === "dark"}
+          >
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
+        </header>
+      )}
 
       <main className="flex justify-center">
         <Routes>
@@ -174,6 +195,12 @@ const App = () => {
           <Route path="/buyer/order-tracking" element={<OrderTracking onNavigate={navigateBuyerView} />} />
           <Route path="/buyer/order-history" element={<BuyerOrderHistory onNavigate={navigateBuyerView} />} />
           <Route path="/buyer/profile" element={<BuyerProfile onNavigate={navigateBuyerView} onLogout={handleLogout} />} />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={currentUserRole === "admin" ? <Navigate to="/admin/overview" replace /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/overview" element={currentUserRole === "admin" ? <AdminOverview onNavigate={navigateAdminView} /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/escrow" element={currentUserRole === "admin" ? <AdminEscrowAudit onNavigate={navigateAdminView} /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/hubs-disputes" element={currentUserRole === "admin" ? <AdminHubDisputes onNavigate={navigateAdminView} /> : <Navigate to={adminRouteFallback} replace />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

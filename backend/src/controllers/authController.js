@@ -25,6 +25,9 @@ const register = async (req, res) => {
     if (error.code === "CONFLICT") {
       return res.status(409).json(failure("CONFLICT", error.message));
     }
+    if (error.code === "FORBIDDEN") {
+      return res.status(403).json(failure("FORBIDDEN", error.message));
+    }
     console.error("Register error:", error);
     return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
   }

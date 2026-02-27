@@ -69,6 +69,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
         // identifierInput is the phone number here
         const phoneNumber = identifierInput || undefined;
         const email = emailInput || undefined;
+        const adminInviteCode = String(formData.get("adminInviteCode") || "").trim() || undefined;
 
         if (!phoneNumber && !email) {
           setStatus({ loading: false, error: "Please provide either a phone number or an email.", success: null });
@@ -80,7 +81,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
           return;
         }
 
-        await register({ fullName, phoneNumber, email, password, role });
+        await register({ fullName, phoneNumber, email, password, role, adminInviteCode });
         navigate("/auth/login", {
           state: { successMessage: "Account created successfully. Please log in." }
         });
@@ -169,6 +170,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
                   >
                     <option value="farmer">Farmer</option>
                     <option value="buyer">Buyer</option>
+                    <option value="admin">Admin</option>
                   </select>
                   <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[var(--muted)]">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -200,6 +202,20 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
                   className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] placeholder:text-[rgba(163,177,155,0.7)]"
                 />
               </label>
+
+              {role === "admin" && (
+                <label className="flex flex-col gap-2 text-sm font-semibold">
+                  <span className="text-[13px] text-[var(--muted)]">Admin Invite Code</span>
+                  <input
+                    type="password"
+                    name="adminInviteCode"
+                    autoComplete="off"
+                    placeholder="Enter admin invite code"
+                    required
+                    className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] placeholder:text-[rgba(163,177,155,0.7)]"
+                  />
+                </label>
+              )}
             </>
           )}
 

@@ -1,7 +1,7 @@
 ﻿import type { UserRole } from "../types";
 import { apiFetch } from "./client";
 
-export type ApiRole = "FARMER" | "BUYER";
+export type ApiRole = "FARMER" | "BUYER" | "ADMIN";
 
 export type ApiUser = {
   id: string;
@@ -17,8 +17,10 @@ export type AuthResponse = {
   user: ApiUser;
 };
 
-export const toApiRole = (role: UserRole): ApiRole => (role === "farmer" ? "FARMER" : "BUYER");
-export const fromApiRole = (role: ApiRole): UserRole => (role === "FARMER" ? "farmer" : "buyer");
+export const toApiRole = (role: UserRole): ApiRole =>
+  role === "farmer" ? "FARMER" : role === "buyer" ? "BUYER" : "ADMIN";
+export const fromApiRole = (role: ApiRole): UserRole =>
+  role === "FARMER" ? "farmer" : role === "BUYER" ? "buyer" : "admin";
 
 export const register = (payload: {
   fullName: string;
@@ -26,6 +28,7 @@ export const register = (payload: {
   email?: string;
   password: string;
   role: UserRole;
+  adminInviteCode?: string;
 }) =>
   apiFetch<{ user: ApiUser }>("/auth/register", {
     method: "POST",
@@ -35,6 +38,7 @@ export const register = (payload: {
       email: payload.email,
       password: payload.password,
       role: toApiRole(payload.role),
+      adminInviteCode: payload.adminInviteCode,
     }),
   });
 

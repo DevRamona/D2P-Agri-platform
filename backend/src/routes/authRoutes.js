@@ -8,7 +8,7 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/login", login);
 router.post("/refresh", refresh);
-router.get("/me", authGuard, roleGuard("FARMER", "BUYER"), me);
+router.get("/me", authGuard, roleGuard("FARMER", "BUYER", "ADMIN"), me);
 router.post("/logout", logout);
 
 module.exports = router;
