@@ -10,3 +10,11 @@ scikit-learn
 matplotlib
 pytest
 httpx
+transformers>=5.3.0
+accelerate>=1.1.0
+peft>=0.13.0
+datasets>=2.21.0
+safetensors>=0.4.5
+huggingface-hub>=0.24.0
+sentencepiece>=0.2.0
+protobuf>=4.25.0

@@ -1,5 +1,5 @@
 const express = require("express");
-const { analyze, recommendations } = require("../controllers/diseaseController");
+const { analyze, analyzeGenerative, recommendations } = require("../controllers/diseaseController");
 const { parseDiseaseImages } = require("../middleware/diseaseUpload");
 const { createRateLimiter } = require("../middleware/rateLimit");
 
@@ -10,6 +10,13 @@ router.post(
   createRateLimiter({ key: "disease-analyze", windowMs: 60_000, maxRequests: 20 }),
   parseDiseaseImages,
   analyze,
+);
+
+router.post(
+  "/generate",
+  createRateLimiter({ key: "disease-generate", windowMs: 60_000, maxRequests: 20 }),
+  parseDiseaseImages,
+  analyzeGenerative,
 );
 
 router.post(

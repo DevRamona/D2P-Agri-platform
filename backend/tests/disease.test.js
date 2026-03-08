@@ -65,4 +65,53 @@ describe("Disease API", () => {
     );
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  test("POST /api/disease/generate returns diagnosis and recommendation", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          imageId: "img-gen-1",
+          cropType: "bean",
+          disease: "bean_rust",
+          candidateDisease: "bean_rust",
+          diagnosis: "Bean Rust",
+          recommendation: "Remove infected leaves and monitor field moisture.",
+          generatedText: "Disease: Bean Rust. Advice: Remove infected leaves and monitor field moisture.",
+          confidence: 0,
+          isUncertain: false,
+          uncertaintyReasons: [],
+          modelVersion: "paligemma-rwanda-lora-v1",
+          latencyMs: 30.2,
+          warnings: [],
+        },
+      ],
+    });
+
+    const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0xff, 0xd9]);
+
+    const res = await request(app)
+      .post("/api/disease/generate")
+      .field("cropHint", "beans")
+      .field("mode", "upload")
+      .attach("images", fakeJpeg, {
+        filename: "leaf.jpg",
+        contentType: "image/jpeg",
+      });
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toEqual(
+      expect.objectContaining({
+        imageId: expect.any(String),
+        cropType: expect.any(String),
+        disease: expect.any(String),
+        diagnosis: expect.any(String),
+        recommendation: expect.any(String),
+        generatedText: expect.any(String),
+        modelVersion: expect.any(String),
+      }),
+    );
+  });
 });

@@ -37,6 +37,10 @@ Farmers can:
   - validates image type/count/size
   - rate-limited
   - does not persist images by default
+- `POST /api/disease/generate`
+  - multipart `images[]`, `cropHint`, `mode`
+  - uses PaliGemma LoRA adapter in `ml-service` to return generated diagnosis + recommendation
+  - rate-limited
 - `POST /api/disease/recommendations`
   - JSON payload
   - calls OpenAI-compatible LLM endpoint
@@ -84,6 +88,16 @@ LLM_BASE_URL=https://api.openai.com/v1
 LLM_TIMEOUT_MS=20000
 LLM_TEMPERATURE=0.3
 LLM_LOW_CONFIDENCE_THRESHOLD=0.65
+
+# Buyer Payments (Stripe)
+STRIPE_SECRET_KEY=sk_live_or_sk_test_key
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+STRIPE_CURRENCY=rwf
+STRIPE_CHECKOUT_SUCCESS_URL=https://your-frontend-domain/buyer/order-tracking?orderId={ORDER_ID}&checkout=success&session_id={CHECKOUT_SESSION_ID}
+STRIPE_CHECKOUT_CANCEL_URL=https://your-frontend-domain/buyer/order-review?orderId={ORDER_ID}&checkout=cancelled
+
+# Optional local testing only (defaults are false)
+ALLOW_MOBILE_MONEY_STUB=false
 
 # Upload persistence (privacy-first defaults)
 SAVE_UPLOADS=false
@@ -133,6 +147,9 @@ Create `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:4000
+# Optional local testing toggles (defaults are false)
+VITE_ENABLE_STUB_MOBILE_MONEY=false
+VITE_ENABLE_BANK_TRANSFER=false
 ```
 
 Run frontend:
