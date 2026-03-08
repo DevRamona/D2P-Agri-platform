@@ -28,7 +28,7 @@ const buyerOrderSchema = new mongoose.Schema(
     insuranceFee: { type: Number, required: true, default: 0, min: 0 },
     amountDueToday: { type: Number, required: true, min: 0 },
 
-    paymentMethod: { type: String, enum: ["momo", "airtel", "bank"], default: "momo" },
+    paymentMethod: { type: String, enum: ["card", "momo", "airtel", "bank"], default: "card" },
     paymentStatus: {
       type: String,
       enum: ["pending", "deposit_paid", "failed", "refunded"],

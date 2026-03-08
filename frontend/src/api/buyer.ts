@@ -110,12 +110,30 @@ export type BuyerOrderDetailResponse = {
 export type BuyerOrderCheckoutSessionData = {
   order: BuyerOrder;
   checkout: {
-    sessionId: string;
+    sessionId: string | null;
     url: string | null;
     expiresAt: string | null;
     currency: string;
-    transferGroup: string;
+    transferGroup: string | null;
+    kind?: "stripe" | "mobile_money" | "manual" | string;
+    method?: string;
+    status?: string;
+    requiresAction?: boolean;
+    message?: string;
+    instructions?: string[];
+    mobileMoney?: {
+      stub?: boolean;
+      provider?: string;
+      providerCode?: string;
+      providerLabel?: string;
+      reference?: string;
+      amount?: number;
+      currency?: string;
+      expiresAt?: string;
+      instructions?: string[];
+    } | null;
   };
+  timeline?: BuyerOrderTimelineStep[];
 };
 
 export type BuyerOrderHistoryData = {
@@ -155,7 +173,7 @@ export type BuyerProfileData = {
   lastSynced: string;
 };
 
-export const createBuyerOrder = (payload: { batchId: string; paymentMethod?: "momo" | "airtel" | "bank" }) =>
+export const createBuyerOrder = (payload: { batchId: string; paymentMethod?: "card" | "momo" | "airtel" | "bank" }) =>
   apiFetch<BuyerOrderDetailResponse>("/buyer/orders", {
     method: "POST",
     body: JSON.stringify(payload),

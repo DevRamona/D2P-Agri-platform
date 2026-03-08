@@ -23,6 +23,10 @@ const resolveImageUrl = (image: string | null) => {
   return image;
 };
 
+type PaymentMethod = "card" | "momo" | "airtel" | "bank";
+const MOBILE_MONEY_STUB_ENABLED = String(import.meta.env.VITE_ENABLE_STUB_MOBILE_MONEY || "false").toLowerCase() === "true";
+const BANK_TRANSFER_ENABLED = String(import.meta.env.VITE_ENABLE_BANK_TRANSFER || "false").toLowerCase() === "true";
+
 const OrderReview = ({ onNavigate }: OrderReviewProps) => {
   const selectedBatch = getBuyerSelectedBatch();
   const quote = getBuyerOrderQuote(selectedBatch);
@@ -30,7 +34,8 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
   const orderRef = formatOrderReference(selectedBatch?.id);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"momo" | "airtel" | "bank">("momo");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
 
   if (!selectedBatch) {
     return (
@@ -85,6 +90,11 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
       {error && (
         <div className="rounded-[16px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
+        </div>
+      )}
+      {notice && (
+        <div className="rounded-[16px] border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-3 text-sm text-[var(--accent)]">
+          {notice}
         </div>
       )}
 
@@ -173,11 +183,44 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
         <button
           type="button"
           className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
-            paymentMethod === "momo"
+            paymentMethod === "card"
               ? "border border-[var(--accent)] bg-[var(--surface)]"
               : "border border-[var(--stroke)] bg-[var(--surface)]"
           }`}
-          onClick={() => setPaymentMethod("momo")}
+          onClick={() => setPaymentMethod("card")}
+        >
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-emerald-600 text-white font-semibold text-[11px]">
+              Card
+            </span>
+            <div>
+              <p className="m-0 text-sm font-semibold">Card (Stripe Checkout)</p>
+              <p className="m-0 text-xs text-[var(--muted)]">Live processing supported</p>
+            </div>
+          </div>
+          <span
+            className={`grid h-5 w-5 place-items-center rounded-full ${
+              paymentMethod === "card"
+                ? "bg-[var(--accent)] text-[#0b1307]"
+                : "border border-[var(--stroke)]"
+            }`}
+          >
+            {paymentMethod === "card" && (
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12l4 4 10-10" />
+              </svg>
+            )}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
+            paymentMethod === "momo"
+              ? "border border-[var(--accent)] bg-[var(--surface)]"
+              : "border border-[var(--stroke)] bg-[var(--surface)]"
+          } ${!MOBILE_MONEY_STUB_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
+          onClick={() => MOBILE_MONEY_STUB_ENABLED && setPaymentMethod("momo")}
+          disabled={!MOBILE_MONEY_STUB_ENABLED}
         >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-yellow-400 text-black font-semibold text-xs">
@@ -185,7 +228,9 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
             </span>
             <div>
               <p className="m-0 text-sm font-semibold">MTN Mobile Money</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Instant payment processing</p>
+              <p className="m-0 text-xs text-[var(--muted)]">
+                {MOBILE_MONEY_STUB_ENABLED ? "Stub mode for local testing" : "Disabled until provider integration is live"}
+              </p>
             </div>
           </div>
           <span
@@ -208,8 +253,9 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
             paymentMethod === "airtel"
               ? "border border-[var(--accent)] bg-[var(--surface)]"
               : "border border-[var(--stroke)] bg-[var(--surface)]"
-          }`}
-          onClick={() => setPaymentMethod("airtel")}
+          } ${!MOBILE_MONEY_STUB_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
+          onClick={() => MOBILE_MONEY_STUB_ENABLED && setPaymentMethod("airtel")}
+          disabled={!MOBILE_MONEY_STUB_ENABLED}
         >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-red-500 text-white font-semibold text-xs">
@@ -217,7 +263,9 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
             </span>
             <div>
               <p className="m-0 text-sm font-semibold">Airtel Money</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Instant payment processing</p>
+              <p className="m-0 text-xs text-[var(--muted)]">
+                {MOBILE_MONEY_STUB_ENABLED ? "Stub mode for local testing" : "Disabled until provider integration is live"}
+              </p>
             </div>
           </div>
           <span
@@ -240,8 +288,9 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
             paymentMethod === "bank"
               ? "border border-[var(--accent)] bg-[var(--surface)]"
               : "border border-[var(--stroke)] bg-[var(--surface)]"
-          }`}
-          onClick={() => setPaymentMethod("bank")}
+          } ${!BANK_TRANSFER_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
+          onClick={() => BANK_TRANSFER_ENABLED && setPaymentMethod("bank")}
+          disabled={!BANK_TRANSFER_ENABLED}
         >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-slate-700 text-white font-semibold text-xs">
@@ -249,7 +298,9 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
             </span>
             <div>
               <p className="m-0 text-sm font-semibold">Bank Transfer</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Processing time: 1-2 days</p>
+              <p className="m-0 text-xs text-[var(--muted)]">
+                {BANK_TRANSFER_ENABLED ? "Manual reconciliation required" : "Disabled in this environment"}
+              </p>
             </div>
           </div>
           <span
@@ -297,25 +348,50 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
           try {
             setSubmitting(true);
             setError(null);
+            setNotice(null);
             const result = await createBuyerOrder({ batchId: selectedBatch.id, paymentMethod });
             setBuyerSelectedOrder(result.order);
             const checkoutResult = await createBuyerOrderCheckoutSession(result.order.id);
             setBuyerSelectedOrder(checkoutResult.order);
 
-            if (!checkoutResult.checkout.url) {
-              throw new Error("Stripe checkout URL was not returned");
+            if (checkoutResult.checkout.url) {
+              window.location.assign(checkoutResult.checkout.url);
+              return;
             }
 
-            window.location.assign(checkoutResult.checkout.url);
+            if (checkoutResult.checkout.kind === "mobile_money") {
+              const msg =
+                checkoutResult.checkout.message ||
+                "Mobile money request was created. Complete payment on your phone.";
+              setNotice(msg);
+              onNavigate?.(`order-tracking?orderId=${checkoutResult.order.id}&checkout=mobile_money`);
+              return;
+            }
+
+            throw new Error("No checkout redirect URL was returned");
           } catch (err) {
             console.error("Failed to create order", err);
-            setError("Could not start Stripe checkout right now. Please verify backend Stripe keys and try again.");
+            setError(err instanceof Error ? err.message : "Could not start the selected payment method right now.");
           } finally {
             setSubmitting(false);
           }
         }}
       >
-        {submitting ? "Redirecting to Stripe..." : `Confirm & Pay ${formatCurrency(quote.amountDueToday)}`}
+        {submitting
+          ? paymentMethod === "card"
+            ? "Opening secure checkout..."
+            : paymentMethod === "momo"
+            ? "Requesting MTN Mobile Money..."
+            : paymentMethod === "airtel"
+              ? "Requesting Airtel Money..."
+              : "Preparing payment..."
+          : paymentMethod === "card"
+            ? `Confirm & Pay by Card (${formatCurrency(quote.amountDueToday)})`
+            : paymentMethod === "momo"
+            ? `Confirm & Pay with MTN MoMo (${formatCurrency(quote.amountDueToday)})`
+            : paymentMethod === "airtel"
+              ? `Confirm & Pay with Airtel Money (${formatCurrency(quote.amountDueToday)})`
+              : `Confirm Payment (${formatCurrency(quote.amountDueToday)})`}
       </button>
     </section>
   );

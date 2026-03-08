@@ -4,8 +4,10 @@ const { User } = require("../models/User");
 const {
   createBuyerOrderCheckoutSession,
   createEscrowReleaseTransfer,
+  getStripeClient,
   isStripeEnabled,
 } = require("../services/stripeService");
+const { createMobileMoneyPaymentSessionStub } = require("../services/mobileMoneyService");
 const { success, failure } = require("../utils/response");
 
 const _normalizeCropKey = (name) => {
@@ -78,6 +80,131 @@ const _calculateOrderQuote = (totalPrice, options = {}) => {
   };
 };
 
+const _paymentMethodLabel = (method) => {
+  const normalized = String(method || "").trim().toLowerCase();
+  if (normalized === "card") return "Card";
+  if (normalized === "momo") return "MTN Mobile Money";
+  if (normalized === "airtel") return "Airtel Money";
+  if (normalized === "bank") return "Bank Transfer";
+  return "Card";
+};
+
+const _mobileMoneyCollectionMode = () => {
+  const mode = String(process.env.MOBILE_MONEY_COLLECTION_MODE || "stub_auto_confirm")
+    .trim()
+    .toLowerCase();
+  return mode === "stub_pending" ? "stub_pending" : "stub_auto_confirm";
+};
+
+const _isMobileMoneyStubEnabled = () =>
+  String(process.env.ALLOW_MOBILE_MONEY_STUB || "false").trim().toLowerCase() === "true";
+
+const _extractStripePaymentIntentId = (session) => {
+  const paymentIntent = session?.payment_intent;
+  if (typeof paymentIntent === "string") return paymentIntent;
+  if (paymentIntent && typeof paymentIntent === "object" && paymentIntent.id) {
+    return String(paymentIntent.id);
+  }
+  return null;
+};
+
+const _extractStripePaymentIntentStatus = (session) => {
+  const paymentIntent = session?.payment_intent;
+  if (paymentIntent && typeof paymentIntent === "object" && paymentIntent.status) {
+    return String(paymentIntent.status).toLowerCase();
+  }
+  return "";
+};
+
+const _syncOrderWithStripeCheckout = async (order) => {
+  if (!order || !isStripeEnabled()) return order;
+  if (String(order.paymentMethod || "").toLowerCase() !== "card") return order;
+  if (String(order.escrowStatus || "").toLowerCase() === "released") return order;
+
+  const sessionId = String(order.stripeCheckoutSessionId || "").trim();
+  if (!sessionId) return order;
+
+  try {
+    const stripe = getStripeClient();
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+
+    const paymentIntentId = _extractStripePaymentIntentId(session);
+    const paymentIntentStatus = _extractStripePaymentIntentStatus(session);
+    const paymentStatus = String(session?.payment_status || "").toLowerCase();
+    const checkoutStatus = String(session?.status || "").toLowerCase();
+    const now = new Date();
+    let hasChanges = false;
+
+    if (session?.id && session.id !== order.stripeCheckoutSessionId) {
+      order.stripeCheckoutSessionId = session.id;
+      hasChanges = true;
+    }
+    if (paymentIntentId && paymentIntentId !== order.stripePaymentIntentId) {
+      order.stripePaymentIntentId = paymentIntentId;
+      hasChanges = true;
+    }
+    const normalizedStripeStatus = paymentStatus || paymentIntentStatus || checkoutStatus;
+    if (normalizedStripeStatus && normalizedStripeStatus !== order.stripePaymentStatus) {
+      order.stripePaymentStatus = normalizedStripeStatus;
+      hasChanges = true;
+    }
+
+    if (paymentStatus === "paid" || paymentIntentStatus === "succeeded") {
+      if (order.paymentStatus !== "deposit_paid") {
+        order.paymentStatus = "deposit_paid";
+        hasChanges = true;
+      }
+      if (order.escrowStatus !== "funded") {
+        order.escrowStatus = "funded";
+        hasChanges = true;
+      }
+      if (!order.paymentConfirmedAt) {
+        order.paymentConfirmedAt = now;
+        hasChanges = true;
+      }
+      if (!order.escrowFundedAt) {
+        order.escrowFundedAt = now;
+        hasChanges = true;
+      }
+      if (order.trackingStage !== "payment_confirmed") {
+        order.trackingStage = "payment_confirmed";
+        hasChanges = true;
+      }
+      order.trackingUpdatedAt = now;
+      hasChanges = true;
+    } else if (checkoutStatus === "expired" && String(order.paymentStatus || "").toLowerCase() !== "deposit_paid") {
+      if (order.paymentStatus !== "failed") {
+        order.paymentStatus = "failed";
+        hasChanges = true;
+      }
+      if (order.escrowStatus !== "awaiting_payment") {
+        order.escrowStatus = "awaiting_payment";
+        hasChanges = true;
+      }
+      if (order.trackingStage !== "awaiting_payment") {
+        order.trackingStage = "awaiting_payment";
+        hasChanges = true;
+      }
+      order.trackingUpdatedAt = now;
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      await order.save();
+    }
+  } catch (error) {
+    console.error("Stripe checkout sync error:", {
+      orderId: String(order._id),
+      stripeCheckoutSessionId: sessionId,
+      message: error.message,
+    });
+  }
+
+  return order;
+};
+
 const _generateOrderNumber = async () => {
   for (let i = 0; i < 5; i += 1) {
     const suffix = Math.floor(100000 + Math.random() * 900000);
@@ -113,7 +240,7 @@ const _buildOrderSummaryFromDoc = (order) => ({
   serviceFee: Number(order.serviceFee) || 0,
   insuranceFee: Number(order.insuranceFee) || 0,
   amountDueToday: Number(order.amountDueToday) || 0,
-  paymentMethod: order.paymentMethod || "momo",
+  paymentMethod: order.paymentMethod || "card",
   escrowStatus: order.escrowStatus || "awaiting_payment",
   stripeCheckoutSessionId: order.stripeCheckoutSessionId || null,
   stripePaymentIntentId: order.stripePaymentIntentId || null,
@@ -139,8 +266,8 @@ const _buildTrackingTimeline = (order) => {
       key: "payment_confirmed",
       title: "Payment Confirmed",
       detail: isPaymentConfirmed
-        ? `Deposit secured in escrow via ${(order.paymentMethod || "momo").toUpperCase()}`
-        : "Awaiting buyer deposit payment in Stripe Checkout",
+        ? `Deposit secured in escrow via ${(order.paymentMethod || "card").toUpperCase()}`
+        : `Awaiting buyer deposit payment via ${_paymentMethodLabel(order.paymentMethod)}`,
       time: isPaymentConfirmed ? createdAt.toLocaleString() : "Pending payment",
     },
     {
@@ -348,9 +475,9 @@ const createOrder = async (req, res) => {
       totalPrice,
       pricePerKg,
       currency: "RWF",
-      paymentMethod: ["momo", "airtel", "bank"].includes(String(paymentMethod || "").toLowerCase())
+      paymentMethod: ["card", "momo", "airtel", "bank"].includes(String(paymentMethod || "").toLowerCase())
         ? String(paymentMethod).toLowerCase()
-        : "momo",
+        : "card",
       paymentStatus: "pending",
       escrowStatus: "awaiting_payment",
       trackingStage: "awaiting_payment",
@@ -382,6 +509,82 @@ const createCheckoutSession = async (req, res) => {
       return res.status(404).json(failure("NOT_FOUND", "Order not found"));
     }
 
+    await _syncOrderWithStripeCheckout(order);
+
+    if (String(order.paymentStatus) === "deposit_paid" || String(order.escrowStatus) === "funded") {
+      return res.status(400).json(failure("ORDER_ALREADY_PAID", "This order deposit has already been paid"));
+    }
+
+    const buyer = await User.findById(buyerId).select("fullName email").lean();
+    if (!buyer) {
+      return res.status(404).json(failure("NOT_FOUND", "Buyer not found"));
+    }
+
+    const paymentMethod = String(order.paymentMethod || "card").toLowerCase();
+    if (paymentMethod === "momo" || paymentMethod === "airtel") {
+      if (!_isMobileMoneyStubEnabled()) {
+        return res.status(501).json(
+          failure(
+            "MOBILE_MONEY_NOT_CONFIGURED",
+            "Mobile money collection is not connected yet. Use Card checkout, or set ALLOW_MOBILE_MONEY_STUB=true for local testing.",
+          ),
+        );
+      }
+
+      const mobileMoneySession = createMobileMoneyPaymentSessionStub({ order: order.toObject(), buyer });
+      const collectionMode = _mobileMoneyCollectionMode();
+      const now = new Date();
+
+      order.trackingUpdatedAt = now;
+      if (collectionMode === "stub_auto_confirm") {
+        order.paymentStatus = "deposit_paid";
+        order.escrowStatus = "funded";
+        order.paymentConfirmedAt = now;
+        order.escrowFundedAt = now;
+        order.trackingStage = "payment_confirmed";
+        order.stripePaymentStatus = "mobile_money_stub_confirmed";
+      } else {
+        order.trackingStage = "awaiting_payment";
+        order.stripePaymentStatus = "mobile_money_stub_pending";
+      }
+      await order.save();
+
+      return res.status(200).json(
+        success({
+          order: _buildOrderSummaryFromDoc(order.toObject()),
+          timeline: _buildTrackingTimeline(order.toObject()),
+          checkout: {
+            sessionId: null,
+            url: null,
+            expiresAt: mobileMoneySession.mobileMoney?.expiresAt || null,
+            currency: String(order.currency || "RWF").toUpperCase(),
+            transferGroup: order.stripeTransferGroup || null,
+            kind: "mobile_money",
+            method: paymentMethod,
+            status: collectionMode === "stub_auto_confirm" ? "confirmed" : "pending_provider_integration",
+            requiresAction: collectionMode === "stub_pending",
+            message:
+              collectionMode === "stub_auto_confirm"
+                ? `${_paymentMethodLabel(paymentMethod)} payment was confirmed and escrow is now funded.`
+                : (mobileMoneySession.clientAction?.message || `${_paymentMethodLabel(paymentMethod)} request created.`),
+            instructions: Array.isArray(mobileMoneySession.mobileMoney?.instructions)
+              ? mobileMoneySession.mobileMoney.instructions
+              : [],
+            mobileMoney: mobileMoneySession.mobileMoney || null,
+          },
+        }),
+      );
+    }
+
+    if (paymentMethod === "bank") {
+      return res.status(400).json(
+        failure(
+          "BANK_TRANSFER_MANUAL_REQUIRED",
+          "Bank transfer collection is manual. Please contact support or use Card checkout.",
+        ),
+      );
+    }
+
     if (!isStripeEnabled()) {
       return res
         .status(503)
@@ -391,15 +594,6 @@ const createCheckoutSession = async (req, res) => {
             "Stripe is not configured on the backend. Set STRIPE_SECRET_KEY and checkout URLs.",
           ),
         );
-    }
-
-    if (String(order.paymentStatus) === "deposit_paid" || String(order.escrowStatus) === "funded") {
-      return res.status(400).json(failure("ORDER_ALREADY_PAID", "This order deposit has already been paid"));
-    }
-
-    const buyer = await User.findById(buyerId).select("fullName email").lean();
-    if (!buyer) {
-      return res.status(404).json(failure("NOT_FOUND", "Buyer not found"));
     }
 
     const checkout = await createBuyerOrderCheckoutSession({ order, buyer });
@@ -417,7 +611,7 @@ const createCheckoutSession = async (req, res) => {
       }),
     );
   } catch (error) {
-    console.error("Create Stripe checkout session error:", error);
+    console.error("Create checkout session error:", error);
     return res.status(500).json(failure("INTERNAL_ERROR", error.message || "Internal server error"));
   }
 };
@@ -434,6 +628,8 @@ const releaseEscrow = async (req, res) => {
     if (!isStripeEnabled()) {
       return res.status(503).json(failure("STRIPE_NOT_CONFIGURED", "Stripe is not configured on the backend"));
     }
+
+    await _syncOrderWithStripeCheckout(order);
 
     if (String(order.paymentStatus) !== "deposit_paid" || String(order.escrowStatus) !== "funded") {
       if (String(order.escrowStatus) === "released") {
@@ -549,16 +745,19 @@ const getOrders = async (req, res) => {
 const getOrderById = async (req, res) => {
   try {
     const buyerId = req.user.id;
-    const order = await BuyerOrder.findOne({ _id: req.params.id, buyer: buyerId }).lean();
+    const order = await BuyerOrder.findOne({ _id: req.params.id, buyer: buyerId });
 
     if (!order) {
       return res.status(404).json(failure("NOT_FOUND", "Order not found"));
     }
 
+    await _syncOrderWithStripeCheckout(order);
+    const orderObject = order.toObject();
+
     return res.status(200).json(
       success({
-        order: _buildOrderSummaryFromDoc(order),
-        timeline: _buildTrackingTimeline(order),
+        order: _buildOrderSummaryFromDoc(orderObject),
+        timeline: _buildTrackingTimeline(orderObject),
       }),
     );
   } catch (error) {

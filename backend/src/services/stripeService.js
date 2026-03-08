@@ -105,7 +105,7 @@ const createBuyerOrderCheckoutSession = async ({ order, buyer }) => {
       buyerId: String(order.buyer),
       farmerId: String(order.farmer),
       paymentType: "deposit_escrow",
-      paymentMethodPreference: String(order.paymentMethod || "momo"),
+      paymentMethodPreference: String(order.paymentMethod || "card"),
       transferGroup,
     },
     payment_intent_data: {

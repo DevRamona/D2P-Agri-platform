@@ -139,7 +139,14 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
 
       {checkoutState === "cancelled" && (
         <div className="rounded-[16px] border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
-          Stripe checkout was cancelled. Your order remains pending until the deposit is paid.
+          Checkout was cancelled. Your order remains pending until the deposit is paid.
+        </div>
+      )}
+      {checkoutState === "mobile_money" && (
+        <div className="rounded-[16px] border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-3 text-sm text-[var(--accent)]">
+          {order.paymentStatus === "deposit_paid"
+            ? "Mobile Money payment confirmed. Escrow is funded and order processing has started."
+            : "Mobile Money request created. Complete payment on your phone to fund escrow."}
         </div>
       )}
 
