@@ -1,4 +1,4 @@
-export type UserRole = "farmer" | "buyer";
+export type UserRole = "farmer" | "buyer" | "admin";
 
 export type ViewMode =
   | "welcome"
@@ -16,6 +16,7 @@ export type ViewMode =
   | "order-review"
   | "order-tracking"
   | "buyer-order-history"
+  | "buyer-profile"
   | string; // Allow dynamic paths like batch-tracker/:id
 
 export type ThemeMode = "light" | "dark";

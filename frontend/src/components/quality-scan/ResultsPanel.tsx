@@ -72,7 +72,7 @@ const ResultsPanel = ({ results, previewByImageId, language, onLanguageChange }:
     try {
       const data = await getDiseaseRecommendations({
         cropType: result.cropType,
-        disease: result.disease,
+        disease: result.candidateDisease || result.disease,
         confidence: result.confidence,
         location: [district, selectedProvince.label, "Rwanda"].filter(Boolean).join(", "),
         locationContext: {
@@ -221,6 +221,7 @@ const ResultsPanel = ({ results, previewByImageId, language, onLanguageChange }:
       {results.map((result) => {
         const recommendationState = recommendationStates[result.imageId];
         const isHealthy = result.disease.toLowerCase() === "healthy";
+        const isUncertain = Boolean(result.isUncertain) || result.disease.toLowerCase() === "uncertain";
         const previewUrl = previewByImageId[result.imageId];
 
         return (
@@ -236,7 +237,11 @@ const ResultsPanel = ({ results, previewByImageId, language, onLanguageChange }:
                   <p className="m-0 text-xs font-semibold tracking-[1px] text-[var(--muted)]">
                     {result.cropType.toUpperCase()} | {result.modelVersion}
                   </p>
-                  <h3 className="m-0 mt-1 text-lg font-semibold">{formatDiseaseLabel(result.disease)}</h3>
+                  <h3 className="m-0 mt-1 text-lg font-semibold">
+                    {isUncertain
+                      ? `Uncertain (${formatDiseaseLabel(result.candidateDisease || "unknown")})`
+                      : formatDiseaseLabel(result.disease)}
+                  </h3>
                 </div>
                 <div className="rounded-full bg-[var(--surface-2)] px-3 py-2 text-xs font-semibold">
                   Confidence {formatPercent(result.confidence)}
@@ -251,6 +256,23 @@ const ResultsPanel = ({ results, previewByImageId, language, onLanguageChange }:
                 {result.warnings && result.warnings.length > 0 && (
                   <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-amber-100">
                     <span className="font-semibold">Image quality warnings:</span> {result.warnings.join("; ")}
+                  </div>
+                )}
+                {isUncertain && (
+                  <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                    <span className="font-semibold">Uncertain classification.</span>{" "}
+                    {result.uncertaintyReasons && result.uncertaintyReasons.length > 0
+                      ? result.uncertaintyReasons.join(" ")
+                      : "Capture extra angles before treatment."}
+                  </div>
+                )}
+                {result.topPredictions && result.topPredictions.length > 0 && (
+                  <div className="rounded-xl border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+                    <span className="font-semibold">Top candidates:</span>{" "}
+                    {result.topPredictions
+                      .slice(0, 3)
+                      .map((item) => `${formatDiseaseLabel(item.disease)} (${formatPercent(item.confidence)})`)
+                      .join(" | ")}
                   </div>
                 )}
                 <div className="text-xs text-[var(--muted)]">Model latency: {result.latencyMs} ms</div>

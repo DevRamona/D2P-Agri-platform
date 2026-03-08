@@ -10,7 +10,18 @@ export type DiseaseAnalysisResult = {
   imageId: string;
   cropType: "maize" | "bean" | "unknown";
   disease: string;
+  candidateDisease?: string;
   confidence: number;
+  isUncertain?: boolean;
+  uncertaintyReasons?: string[];
+  thresholdApplied?: number;
+  margin?: number;
+  marginThreshold?: number;
+  topPredictions?: Array<{
+    cropType: string;
+    disease: string;
+    confidence: number;
+  }>;
   modelVersion: string;
   latencyMs: number;
   summary?: string;

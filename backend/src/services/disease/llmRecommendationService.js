@@ -108,7 +108,8 @@ class OpenAICompatibleLlmClient {
 const languageLabel = (language) => (language === "rw" ? "Kinyarwanda" : "English");
 
 const buildPrompts = ({ cropType, disease, confidence, location, locationContext, season, farmerGoal, severity, language }) => {
-  const lowConfidence = Number(confidence) < LOW_CONFIDENCE_THRESHOLD;
+  const uncertainDisease = String(disease || "").toLowerCase() === "uncertain";
+  const lowConfidence = uncertainDisease || Number(confidence) < LOW_CONFIDENCE_THRESHOLD;
   const locale = location || "Rwanda";
   const outputLanguage = languageLabel(language);
   const structuredLocationLines = locationContext

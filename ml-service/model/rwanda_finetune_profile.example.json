@@ -1,0 +1,38 @@
+{
+  "min_weight": 0.65,
+  "max_weight": 3.0,
+  "season_weights": {
+    "season_a": 1.0,
+    "season_b": 1.25,
+    "season_c": 1.1
+  },
+  "province_weights": {
+    "north": 1.1,
+    "south": 1.05,
+    "east": 1.2,
+    "west": 1.2,
+    "kigali": 1.0
+  },
+  "rainfall_weights": {
+    "high": 1.2,
+    "moderate": 1.0,
+    "low": 1.1
+  },
+  "crop_weights": {
+    "bean": 1.0,
+    "maize": 1.0
+  },
+  "disease_weights": {
+    "bean:angular_leaf_spot": 1.15,
+    "bean:bean_rust": 1.2,
+    "maize:common_rust": 1.1,
+    "maize:gray_leaf_spot": 1.15,
+    "maize:northern_leaf_blight": 1.15
+  },
+  "district_weights": {
+    "nyagatare": 1.1,
+    "kayonza": 1.1,
+    "nyamasheke": 1.1,
+    "musanze": 1.08
+  }
+}

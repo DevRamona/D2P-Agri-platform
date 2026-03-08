@@ -1,6 +1,6 @@
 ﻿const { z } = require("zod");
 
-const roleEnum = z.enum(["FARMER", "BUYER"]);
+const roleEnum = z.enum(["FARMER", "BUYER", "ADMIN"]);
 
 const registerSchema = z.object({
   fullName: z.string().min(2),
@@ -8,6 +8,7 @@ const registerSchema = z.object({
   email: z.string().email("Invalid email address").optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: roleEnum,
+  adminInviteCode: z.string().min(3).optional(),
 }).refine(data => data.phoneNumber || data.email, {
   message: "Either phone number or email is required",
   path: ["phoneNumber"],

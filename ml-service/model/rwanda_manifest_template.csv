@@ -1,0 +1,8 @@
+image_path,label,crop_type,disease,province,district,sector,season,rainfall_band,agro_zone,capture_mode,source
+beans/healthy/bean_0001.jpg,bean:healthy,bean,healthy,North,Musanze,Kinigi,Season A,high,highland,field_camera,rab_pilot
+beans/bean_rust/bean_0002.jpg,bean:bean_rust,bean,bean_rust,West,Rubavu,Nyamyumba,Season B,high,humid_highland,upload,farmer_app
+beans/angular_leaf_spot/bean_0003.jpg,bean:angular_leaf_spot,bean,angular_leaf_spot,South,Huye,Ngoma,Season B,moderate,mid_altitude,upload,farmer_app
+maize/healthy/maize_0001.jpg,maize:healthy,maize,healthy,East,Nyagatare,Rukomo,Season A,low,plateau,field_camera,rab_trial
+maize/common_rust/maize_0002.jpg,maize:common_rust,maize,common_rust,East,Kayonza,Mukarange,Season C,low,lowland,upload,farmer_app
+maize/gray_leaf_spot/maize_0003.jpg,maize:gray_leaf_spot,maize,gray_leaf_spot,West,Nyamasheke,Gihombo,Season B,high,humid_highland,field_camera,rab_trial
+maize/northern_leaf_blight/maize_0004.jpg,maize:northern_leaf_blight,maize,northern_leaf_blight,North,Gicumbi,Rukomo,Season B,high,highland,upload,farmer_app

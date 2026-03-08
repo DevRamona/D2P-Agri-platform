@@ -1,10 +1,75 @@
-﻿import type { ViewMode } from "../types";
+import { useState } from "react";
+import { createBuyerOrder, createBuyerOrderCheckoutSession } from "../api/buyer";
+import { API_BASE } from "../api/client";
+import type { ViewMode } from "../types";
+import {
+  formatOrderReference,
+  getBuyerOrderQuote,
+  getBuyerSelectedBatch,
+  setBuyerSelectedOrder,
+} from "../utils/buyerCheckout";
 
 interface OrderReviewProps {
   onNavigate?: (view: ViewMode) => void;
 }
 
+const FALLBACK_IMAGE = "https://placehold.co/600x400?text=Selected+Batch";
+
+const formatCurrency = (value: number) => `${Math.round(Number(value) || 0).toLocaleString()} RWF`;
+
+const resolveImageUrl = (image: string | null) => {
+  if (!image) return FALLBACK_IMAGE;
+  if (image.startsWith("/uploads")) return `${API_BASE}${image}`;
+  return image;
+};
+
+type PaymentMethod = "card" | "momo" | "airtel" | "bank";
+const MOBILE_MONEY_STUB_ENABLED = String(import.meta.env.VITE_ENABLE_STUB_MOBILE_MONEY || "false").toLowerCase() === "true";
+const BANK_TRANSFER_ENABLED = String(import.meta.env.VITE_ENABLE_BANK_TRANSFER || "false").toLowerCase() === "true";
+
 const OrderReview = ({ onNavigate }: OrderReviewProps) => {
+  const selectedBatch = getBuyerSelectedBatch();
+  const quote = getBuyerOrderQuote(selectedBatch);
+  const depositPercentLabel = `${Math.round(quote.depositPercent * 100)}%`;
+  const orderRef = formatOrderReference(selectedBatch?.id);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+
+  if (!selectedBatch) {
+    return (
+      <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
+        <header className="flex items-center justify-between">
+          <button
+            type="button"
+            className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
+            onClick={() => onNavigate?.("buyer-marketplace")}
+            aria-label="Go back"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <p className="m-0 text-base font-semibold">Order Review &amp; Deposit</p>
+          <span className="h-10 w-10" aria-hidden="true" />
+        </header>
+
+        <div className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-5 text-sm text-[var(--muted)]">
+          No selected batch found. Start from the buyer marketplace and choose a farmer batch to continue checkout.
+        </div>
+
+        <button
+          className="w-full rounded-[18px] bg-[var(--accent)] px-4 py-4 text-base font-semibold text-[#0b1307]"
+          type="button"
+          onClick={() => onNavigate?.("buyer-marketplace")}
+        >
+          Browse Marketplace
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
       <header className="flex items-center justify-between">
@@ -22,17 +87,34 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
         <span className="h-10 w-10" aria-hidden="true" />
       </header>
 
+      {error && (
+        <div className="rounded-[16px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="rounded-[16px] border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-3 text-sm text-[var(--accent)]">
+          {notice}
+        </div>
+      )}
+
       <div className="flex items-center gap-4 rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
         <img
-          src="https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=600&q=80"
-          alt=""
+          src={resolveImageUrl(selectedBatch.image)}
+          alt={selectedBatch.title}
           className="h-16 w-16 rounded-[14px] object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = FALLBACK_IMAGE;
+          }}
         />
         <div>
-          <p className="m-0 text-xs font-semibold text-[var(--accent)]">Confirmed Order</p>
-          <p className="mt-1 text-sm font-semibold">Premium Irish Potatoes</p>
-          <p className="mt-1 text-xs text-[var(--muted)]">500kg · Musanze District</p>
-          <p className="mt-2 text-sm font-semibold">500,000 RWF Total</p>
+          <p className="m-0 text-xs font-semibold text-[var(--accent)]">Confirmed Order · {orderRef}</p>
+          <p className="mt-1 text-sm font-semibold">{selectedBatch.title}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {Math.round(selectedBatch.totalWeight).toLocaleString()}kg · {selectedBatch.destination}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Farmer: {selectedBatch.farmerName}</p>
+          <p className="mt-2 text-sm font-semibold">{formatCurrency(selectedBatch.totalPrice)} Total</p>
         </div>
       </div>
 
@@ -46,16 +128,16 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
       <div className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="m-0 text-xs text-[var(--muted)]">Deposit Amount (60%)</p>
-            <p className="mt-2 text-2xl font-bold text-[var(--accent)]">300,000 RWF</p>
+            <p className="m-0 text-xs text-[var(--muted)]">Deposit Amount ({depositPercentLabel})</p>
+            <p className="mt-2 text-2xl font-bold text-[var(--accent)]">{formatCurrency(quote.depositAmount)}</p>
           </div>
           <div className="text-right">
             <p className="m-0 text-xs text-[var(--muted)]">Balance Due on Delivery</p>
-            <p className="mt-2 text-base font-semibold">200,000 RWF</p>
+            <p className="mt-2 text-base font-semibold">{formatCurrency(quote.balanceDue)}</p>
           </div>
         </div>
         <div className="mt-4 h-3 w-full rounded-full bg-[var(--surface-2)]">
-          <div className="h-3 w-[60%] rounded-full bg-[var(--accent)]" />
+          <div className="h-3 rounded-full bg-[var(--accent)]" style={{ width: `${quote.depositPercent * 100}%` }} />
         </div>
         <div className="mt-4 flex items-start gap-3 rounded-[16px] border border-[var(--stroke)] bg-[var(--surface-2)] p-4 text-xs text-[var(--muted)]">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -64,8 +146,8 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
             </svg>
           </span>
           <p className="m-0">
-            Your 305,000 RWF payment will be held in escrow. Funds are only released to the farmer after you confirm
-            delivery and quality in the app.
+            Your {formatCurrency(quote.amountDueToday)} payment will be held in escrow. Funds are released to the
+            farmer after delivery and quality confirmation in the app.
           </p>
         </div>
       </div>
@@ -75,20 +157,22 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
       </div>
       <div className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm">
         <div className="flex items-center justify-between text-[var(--muted)]">
-          <span>Order Deposit (60%)</span>
-          <span className="text-[var(--text)]">300,000 RWF</span>
+          <span>Order Deposit ({depositPercentLabel})</span>
+          <span className="text-[var(--text)]">{formatCurrency(quote.depositAmount)}</span>
         </div>
         <div className="mt-3 flex items-center justify-between text-[var(--muted)]">
           <span>Service Fee</span>
-          <span className="text-[var(--text)]">5,000 RWF</span>
+          <span className="text-[var(--text)]">{formatCurrency(quote.serviceFee)}</span>
         </div>
         <div className="mt-3 flex items-center justify-between text-[var(--muted)]">
           <span>Logistics Insurance</span>
-          <span className="text-[var(--accent)]">Free</span>
+          <span className={quote.insuranceFee > 0 ? "text-[var(--text)]" : "text-[var(--accent)]"}>
+            {quote.insuranceFee > 0 ? formatCurrency(quote.insuranceFee) : "Free"}
+          </span>
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-[var(--stroke)] pt-4 font-semibold">
           <span>Amount Due Today</span>
-          <span className="text-[var(--accent)]">305,000 RWF</span>
+          <span className="text-[var(--accent)]">{formatCurrency(quote.amountDueToday)}</span>
         </div>
       </div>
 
@@ -96,45 +180,142 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
         <p className="m-0 text-xs font-semibold tracking-[2px] text-[var(--muted)]">Payment Method</p>
       </div>
       <div className="flex flex-col gap-3">
-        <button className="flex items-center justify-between rounded-[18px] border border-[var(--accent)] bg-[var(--surface)] px-4 py-3">
+        <button
+          type="button"
+          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
+            paymentMethod === "card"
+              ? "border border-[var(--accent)] bg-[var(--surface)]"
+              : "border border-[var(--stroke)] bg-[var(--surface)]"
+          }`}
+          onClick={() => setPaymentMethod("card")}
+        >
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-emerald-600 text-white font-semibold text-[11px]">
+              Card
+            </span>
+            <div>
+              <p className="m-0 text-sm font-semibold">Card (Stripe Checkout)</p>
+              <p className="m-0 text-xs text-[var(--muted)]">Live processing supported</p>
+            </div>
+          </div>
+          <span
+            className={`grid h-5 w-5 place-items-center rounded-full ${
+              paymentMethod === "card"
+                ? "bg-[var(--accent)] text-[#0b1307]"
+                : "border border-[var(--stroke)]"
+            }`}
+          >
+            {paymentMethod === "card" && (
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12l4 4 10-10" />
+              </svg>
+            )}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
+            paymentMethod === "momo"
+              ? "border border-[var(--accent)] bg-[var(--surface)]"
+              : "border border-[var(--stroke)] bg-[var(--surface)]"
+          } ${!MOBILE_MONEY_STUB_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
+          onClick={() => MOBILE_MONEY_STUB_ENABLED && setPaymentMethod("momo")}
+          disabled={!MOBILE_MONEY_STUB_ENABLED}
+        >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-yellow-400 text-black font-semibold text-xs">
               MoMo
             </span>
             <div>
               <p className="m-0 text-sm font-semibold">MTN Mobile Money</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Instant payment processing</p>
+              <p className="m-0 text-xs text-[var(--muted)]">
+                {MOBILE_MONEY_STUB_ENABLED ? "Stub mode for local testing" : "Disabled until provider integration is live"}
+              </p>
             </div>
           </div>
-          <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-[#0b1307]">
-            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M5 12l4 4 10-10" />
-            </svg>
+          <span
+            className={`grid h-5 w-5 place-items-center rounded-full ${
+              paymentMethod === "momo"
+                ? "bg-[var(--accent)] text-[#0b1307]"
+                : "border border-[var(--stroke)]"
+            }`}
+          >
+            {paymentMethod === "momo" && (
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12l4 4 10-10" />
+              </svg>
+            )}
           </span>
         </button>
-        <button className="flex items-center justify-between rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3">
+        <button
+          type="button"
+          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
+            paymentMethod === "airtel"
+              ? "border border-[var(--accent)] bg-[var(--surface)]"
+              : "border border-[var(--stroke)] bg-[var(--surface)]"
+          } ${!MOBILE_MONEY_STUB_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
+          onClick={() => MOBILE_MONEY_STUB_ENABLED && setPaymentMethod("airtel")}
+          disabled={!MOBILE_MONEY_STUB_ENABLED}
+        >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-red-500 text-white font-semibold text-xs">
               Airtel
             </span>
             <div>
               <p className="m-0 text-sm font-semibold">Airtel Money</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Instant payment processing</p>
+              <p className="m-0 text-xs text-[var(--muted)]">
+                {MOBILE_MONEY_STUB_ENABLED ? "Stub mode for local testing" : "Disabled until provider integration is live"}
+              </p>
             </div>
           </div>
-          <span className="grid h-5 w-5 place-items-center rounded-full border border-[var(--stroke)]" />
+          <span
+            className={`grid h-5 w-5 place-items-center rounded-full ${
+              paymentMethod === "airtel"
+                ? "bg-[var(--accent)] text-[#0b1307]"
+                : "border border-[var(--stroke)]"
+            }`}
+          >
+            {paymentMethod === "airtel" && (
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12l4 4 10-10" />
+              </svg>
+            )}
+          </span>
         </button>
-        <button className="flex items-center justify-between rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3">
+        <button
+          type="button"
+          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
+            paymentMethod === "bank"
+              ? "border border-[var(--accent)] bg-[var(--surface)]"
+              : "border border-[var(--stroke)] bg-[var(--surface)]"
+          } ${!BANK_TRANSFER_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
+          onClick={() => BANK_TRANSFER_ENABLED && setPaymentMethod("bank")}
+          disabled={!BANK_TRANSFER_ENABLED}
+        >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-slate-700 text-white font-semibold text-xs">
               Bank
             </span>
             <div>
               <p className="m-0 text-sm font-semibold">Bank Transfer</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Processing time: 1-2 days</p>
+              <p className="m-0 text-xs text-[var(--muted)]">
+                {BANK_TRANSFER_ENABLED ? "Manual reconciliation required" : "Disabled in this environment"}
+              </p>
             </div>
           </div>
-          <span className="grid h-5 w-5 place-items-center rounded-full border border-[var(--stroke)]" />
+          <span
+            className={`grid h-5 w-5 place-items-center rounded-full ${
+              paymentMethod === "bank"
+                ? "bg-[var(--accent)] text-[#0b1307]"
+                : "border border-[var(--stroke)]"
+            }`}
+          >
+            {paymentMethod === "bank" && (
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12l4 4 10-10" />
+              </svg>
+            )}
+          </span>
         </button>
       </div>
 
@@ -161,9 +342,56 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
       <button
         className="w-full rounded-[18px] bg-[var(--accent)] px-4 py-4 text-base font-semibold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.35)]"
         type="button"
-        onClick={() => onNavigate?.("order-tracking")}
+        disabled={submitting}
+        onClick={async () => {
+          if (!selectedBatch) return;
+          try {
+            setSubmitting(true);
+            setError(null);
+            setNotice(null);
+            const result = await createBuyerOrder({ batchId: selectedBatch.id, paymentMethod });
+            setBuyerSelectedOrder(result.order);
+            const checkoutResult = await createBuyerOrderCheckoutSession(result.order.id);
+            setBuyerSelectedOrder(checkoutResult.order);
+
+            if (checkoutResult.checkout.url) {
+              window.location.assign(checkoutResult.checkout.url);
+              return;
+            }
+
+            if (checkoutResult.checkout.kind === "mobile_money") {
+              const msg =
+                checkoutResult.checkout.message ||
+                "Mobile money request was created. Complete payment on your phone.";
+              setNotice(msg);
+              onNavigate?.(`order-tracking?orderId=${checkoutResult.order.id}&checkout=mobile_money`);
+              return;
+            }
+
+            throw new Error("No checkout redirect URL was returned");
+          } catch (err) {
+            console.error("Failed to create order", err);
+            setError(err instanceof Error ? err.message : "Could not start the selected payment method right now.");
+          } finally {
+            setSubmitting(false);
+          }
+        }}
       >
-        Confirm &amp; Pay 305,000 RWF
+        {submitting
+          ? paymentMethod === "card"
+            ? "Opening secure checkout..."
+            : paymentMethod === "momo"
+            ? "Requesting MTN Mobile Money..."
+            : paymentMethod === "airtel"
+              ? "Requesting Airtel Money..."
+              : "Preparing payment..."
+          : paymentMethod === "card"
+            ? `Confirm & Pay by Card (${formatCurrency(quote.amountDueToday)})`
+            : paymentMethod === "momo"
+            ? `Confirm & Pay with MTN MoMo (${formatCurrency(quote.amountDueToday)})`
+            : paymentMethod === "airtel"
+              ? `Confirm & Pay with Airtel Money (${formatCurrency(quote.amountDueToday)})`
+              : `Confirm Payment (${formatCurrency(quote.amountDueToday)})`}
       </button>
     </section>
   );

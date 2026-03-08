@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { predictDiseaseBatch } = require("../services/disease/mlInferenceClient");
+const { predictDiseaseBatch, generateDiseaseBatch } = require("../services/disease/mlInferenceClient");
 const { generateDiseaseRecommendations } = require("../services/disease/llmRecommendationService");
 const { createStorageProvider } = require("../services/disease/storage");
 const { buildExplanationSummary } = require("../services/disease/summary");
@@ -90,19 +90,34 @@ const analyze = async (req, res, next) => {
       const normalizedCropType = normalizeCropType(prediction.cropType, cropHint);
       const confidence = Math.max(0, Math.min(1, Number(prediction.confidence || 0)));
       const warnings = Array.isArray(prediction.warnings) ? prediction.warnings : [];
+      const uncertaintyReasons = Array.isArray(prediction.uncertaintyReasons) ? prediction.uncertaintyReasons : [];
+      const topPredictions = Array.isArray(prediction.topPredictions) ? prediction.topPredictions : [];
+      const candidateDisease = String(prediction.candidateDisease || prediction.disease || "unknown");
+      const thresholdApplied = Number(prediction.thresholdApplied || 0);
 
       return {
         imageId,
         cropType: normalizedCropType,
         disease: String(prediction.disease || "unknown"),
+        candidateDisease,
         confidence,
+        isUncertain: Boolean(prediction.isUncertain),
+        uncertaintyReasons,
+        thresholdApplied,
+        margin: Number(prediction.margin || 0),
+        marginThreshold: Number(prediction.marginThreshold || 0),
+        topPredictions,
         modelVersion: String(prediction.modelVersion || "unknown"),
         latencyMs: Number(prediction.latencyMs || 0),
         summary: buildExplanationSummary({
           cropType: normalizedCropType,
           disease: prediction.disease,
+          candidateDisease,
           confidence,
           warnings,
+          isUncertain: Boolean(prediction.isUncertain),
+          uncertaintyReasons,
+          thresholdApplied,
         }),
         warnings,
         _index: index,
@@ -110,6 +125,74 @@ const analyze = async (req, res, next) => {
     });
 
     res.status(200).json(responsePayload.map(({ _index, ...item }) => item));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const analyzeGenerative = async (req, res, next) => {
+  try {
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (files.length === 0) {
+      throw createHttpError(400, "BAD_REQUEST", "images[] is required");
+    }
+
+    const { cropHint, mode } = parseAnalyzeParams(req.body || {});
+
+    await Promise.all(
+      files.map((file) =>
+        storageProvider.save({
+          buffer: file.buffer,
+          mimeType: file.mimetype,
+          originalName: file.originalname,
+        }),
+      ),
+    );
+
+    const generations = await generateDiseaseBatch({
+      files,
+      cropHint,
+      mode,
+    });
+
+    const responsePayload = generations.map((item) => {
+      const imageId = item.imageId || crypto.randomUUID();
+      const normalizedCropType = normalizeCropType(item.cropType, cropHint);
+      const confidence = Math.max(0, Math.min(1, Number(item.confidence || 0)));
+      const warnings = Array.isArray(item.warnings) ? item.warnings : [];
+      const uncertaintyReasons = Array.isArray(item.uncertaintyReasons) ? item.uncertaintyReasons : [];
+      const candidateDisease = String(item.candidateDisease || item.disease || "unknown");
+      const disease = String(item.disease || "unknown");
+
+      return {
+        imageId,
+        cropType: normalizedCropType,
+        disease,
+        candidateDisease,
+        diagnosis: String(item.diagnosis || candidateDisease || disease),
+        recommendation: String(item.recommendation || item.generatedText || ""),
+        generatedText: String(item.generatedText || ""),
+        source: item.source ? String(item.source) : undefined,
+        confidence,
+        isUncertain: Boolean(item.isUncertain),
+        uncertaintyReasons,
+        modelVersion: String(item.modelVersion || "unknown"),
+        latencyMs: Number(item.latencyMs || 0),
+        summary: buildExplanationSummary({
+          cropType: normalizedCropType,
+          disease,
+          candidateDisease,
+          confidence,
+          warnings,
+          isUncertain: Boolean(item.isUncertain),
+          uncertaintyReasons,
+          thresholdApplied: 0,
+        }),
+        warnings,
+      };
+    });
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -160,6 +243,7 @@ const recommendations = async (req, res, next) => {
 
 module.exports = {
   analyze,
+  analyzeGenerative,
   recommendations,
   store_anonymized_feedback,
 };
