@@ -16,6 +16,7 @@ frontend/vite.config.d.ts
 *.png
 __pycache__/
 *.pyc
+**/.pytest_cache/
 ml-models/
 ml-service/artifacts/
 
