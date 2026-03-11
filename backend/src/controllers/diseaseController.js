@@ -13,6 +13,7 @@ const VALID_MODES = new Set(["camera", "upload", "live"]);
 const VALID_LANGUAGES = new Set(["en", "rw"]);
 const VALID_RECOMMENDATION_CROPS = new Set(["maize", "bean", "beans"]);
 const VALID_SEVERITIES = new Set(["mild", "moderate", "severe"]);
+const VALID_ANALYZE_MODELS = new Set(["auto", "classifier", "paligemma"]);
 
 const createHttpError = (status, code, message, details) => {
   const error = new Error(message);
@@ -45,6 +46,42 @@ const normalizeRecommendationCropType = (value) => {
   return crop;
 };
 
+const shouldFallbackToGenerate = (error) => {
+  if (error?.code !== "ML_SERVICE_ERROR") {
+    return false;
+  }
+
+  const status = Number(error?.details?.status || 0);
+  if (status !== 503) {
+    return false;
+  }
+
+  const body = String(error?.details?.body || "").toLowerCase();
+  return body.includes("missing model_path") || body.includes("only /generate is available");
+};
+
+const mapGenerationToPrediction = (item) => {
+  const confidence = typeof item?.confidence === "number" ? item.confidence : 0;
+  return {
+    imageId: typeof item?.imageId === "string" ? item.imageId : undefined,
+    cropType: typeof item?.cropType === "string" ? item.cropType : "unknown",
+    disease: typeof item?.disease === "string" ? item.disease : "unknown",
+    candidateDisease: typeof item?.candidateDisease === "string" ? item.candidateDisease : item?.disease,
+    confidence,
+    isUncertain: typeof item?.isUncertain === "boolean" ? item.isUncertain : confidence <= 0,
+    uncertaintyReasons: Array.isArray(item?.uncertaintyReasons)
+      ? item.uncertaintyReasons.filter((reason) => typeof reason === "string")
+      : [],
+    thresholdApplied: 0,
+    margin: 0,
+    marginThreshold: 0,
+    topPredictions: [],
+    modelVersion: typeof item?.modelVersion === "string" ? item.modelVersion : "unknown",
+    latencyMs: typeof item?.latencyMs === "number" ? item.latencyMs : 0,
+    warnings: Array.isArray(item?.warnings) ? item.warnings.filter((warning) => typeof warning === "string") : [],
+  };
+};
+
 const parseAnalyzeParams = (body) => {
   const cropHint = String(body.cropHint || "auto").toLowerCase();
   const mode = String(body.mode || "upload").toLowerCase();
@@ -58,6 +95,14 @@ const parseAnalyzeParams = (body) => {
   }
 
   return { cropHint, mode };
+};
+
+const resolveAnalyzeModelPreference = () => {
+  const configured = String(process.env.DISEASE_ANALYZE_MODEL || "auto").toLowerCase();
+  if (VALID_ANALYZE_MODELS.has(configured)) {
+    return configured;
+  }
+  return "auto";
 };
 
 const analyze = async (req, res, next) => {
@@ -79,11 +124,42 @@ const analyze = async (req, res, next) => {
       ),
     );
 
-    const predictions = await predictDiseaseBatch({
-      files,
-      cropHint,
-      mode,
-    });
+    const analyzeModel = resolveAnalyzeModelPreference();
+    let predictions;
+
+    if (analyzeModel === "paligemma") {
+      const generations = await generateDiseaseBatch({
+        files,
+        cropHint,
+        mode,
+      });
+      predictions = generations.map(mapGenerationToPrediction);
+    } else if (analyzeModel === "classifier") {
+      predictions = await predictDiseaseBatch({
+        files,
+        cropHint,
+        mode,
+      });
+    } else {
+      try {
+        predictions = await predictDiseaseBatch({
+          files,
+          cropHint,
+          mode,
+        });
+      } catch (error) {
+        if (!shouldFallbackToGenerate(error)) {
+          throw error;
+        }
+
+        const generations = await generateDiseaseBatch({
+          files,
+          cropHint,
+          mode,
+        });
+        predictions = generations.map(mapGenerationToPrediction);
+      }
+    }
 
     const responsePayload = predictions.map((prediction, index) => {
       const imageId = prediction.imageId || crypto.randomUUID();

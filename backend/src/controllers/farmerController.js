@@ -2,8 +2,9 @@ const { success, failure } = require("../utils/response");
 const Product = require("../models/Product");
 const Batch = require("../models/Batch");
 const { getMarketPayload } = require("../services/marketPriceService");
-const crypto = require('crypto');
-const fs = require('fs');
+const { generateDiseaseBatch } = require("../services/disease/mlInferenceClient");
+const crypto = require("crypto");
+const fs = require("fs");
 
 // Helper to generate deterministic mock data based on image content
 const calculateMockQuality = (buffer) => {
@@ -253,32 +254,32 @@ const scanQuality = async (req, res) => {
         // 1. Generate Deterministic Mock Data
         const { moisture, grade, fallbackDisease } = calculateMockQuality(fileBuffer);
 
-        // 2. Prepare to send to ML Service
-        const formData = new FormData();
-        const imageBlob = new Blob([fileBuffer], {
-            type: req.file.mimetype || 'application/octet-stream',
-        });
-        formData.append('file', imageBlob, req.file.originalname || 'scan.jpg');
-
-        // 3. Call ML Service
-        const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+        // 2. Call ML Service (PaLiGemma generator) via shared client
         let mlResult = null;
         let usedFallback = false;
 
         try {
-            const response = await fetch(`${ML_SERVICE_URL}/predict`, {
-                method: 'POST',
-                body: formData
+            const files = [
+                {
+                    buffer: fileBuffer,
+                    mimetype: req.file.mimetype,
+                    originalname: req.file.originalname || "scan.jpg",
+                },
+            ];
+
+            const [generated] = await generateDiseaseBatch({
+                files,
+                cropHint: req.body.cropHint || null,
+                mode: "scanQuality",
             });
 
-            if (response.ok) {
-                mlResult = await response.json();
+            if (generated) {
+                mlResult = generated;
             } else {
-                console.warn("ML Service returned error:", response.status);
                 usedFallback = true;
             }
         } catch (mlError) {
-            console.error("Failed to connect to ML Service:", mlError.message);
+            console.error("Failed to connect to ML Service:", mlError);
             usedFallback = true;
         }
 
@@ -287,9 +288,22 @@ const scanQuality = async (req, res) => {
             mlResult = {
                 label: fallbackDisease,
                 confidence: 0.85 + (Math.random() * 0.1), // Mock confidence
-                recommendation: fallbackDisease === "healthy"
-                    ? "Great news! Your plant looks healthy. Continue with regular care."
-                    : `${fallbackDisease.replace('_', ' ')} detected. Recommendation: Isolate infected plants and monitor moisture levels.`
+                recommendation:
+                    fallbackDisease === "healthy"
+                        ? "Great news! Your plant looks healthy. Continue with regular care."
+                        : `${fallbackDisease.replace("_", " ")} detected. Recommendation: Isolate infected plants and monitor moisture levels.`,
+            };
+        } else {
+            // Normalize PaLiGemma response into the legacy shape expected by the UI
+            mlResult = {
+                label: mlResult.disease || fallbackDisease,
+                confidence: typeof mlResult.confidence === "number" ? mlResult.confidence : 0,
+                recommendation:
+                    mlResult.recommendation ||
+                    (mlResult.diagnosis
+                        ? `${mlResult.diagnosis}. Please follow local agronomist guidance for treatment.`
+                        : "Model generated a diagnosis but no specific recommendation text was provided."),
+                raw: mlResult,
             };
         }
 
