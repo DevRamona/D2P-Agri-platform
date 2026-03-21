@@ -151,8 +151,8 @@ const BatchCreation = ({ onNavigate }: BatchCreationProps) => {
   };
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="app-page-header">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"

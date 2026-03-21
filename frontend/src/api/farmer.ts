@@ -18,6 +18,15 @@ export type Batch = {
     totalPrice: number;
     status: string;
     createdAt: string;
+    deliveryOrder?: {
+        id: string;
+        orderNumber: string | null;
+        status: string;
+        paymentStatus: string;
+        escrowStatus: string;
+        trackingStage: string;
+        trackingUpdatedAt: string | null;
+    } | null;
 };
 
 export type FarmerMarketPrice = {
@@ -37,9 +46,44 @@ export type FarmerMarketPrice = {
 };
 
 export type DashboardData = {
+    account: {
+        id: string;
+        fullName: string;
+        phoneNumber: string;
+        email: string;
+        role: string;
+        createdAt: string | null;
+    };
     totalEarnings: number;
     earningsChange: string | null;
     activeBatches: Batch[];
+    inProgressOrders: {
+        id: string;
+        orderNumber: string | null;
+        batchId: string | null;
+        title: string;
+        buyerName: string;
+        destination: string;
+        totalWeight: number;
+        totalPrice: number;
+        status: string;
+        paymentStatus: string;
+        escrowStatus: string;
+        trackingStage: string;
+        trackingUpdatedAt: string | null;
+        createdAt: string | null;
+    }[];
+    recentlySoldBatches: {
+        id: string;
+        batchId: string;
+        status: string;
+        totalWeight: number;
+        totalPrice: number;
+        destination: string;
+        soldAt: string | null;
+        createdAt: string | null;
+        products: { product: string | Product | null; quantity: number }[];
+    }[];
     marketPrices: FarmerMarketPrice[];
     lastSynced: string;
 };
@@ -111,3 +155,8 @@ export const createBatch = (data: Partial<Batch>) =>
 
 export const getBatchById = (id: string) =>
     apiFetch<Batch>(`/farmer/batch/${id}`);
+
+export const advanceBatchDelivery = (id: string) =>
+    apiFetch<{ batchId: string; order: NonNullable<Batch["deliveryOrder"]> }>(`/farmer/batch/${id}/advance-delivery`, {
+        method: "POST",
+    });

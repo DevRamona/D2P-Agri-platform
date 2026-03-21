@@ -97,8 +97,8 @@ const FarmerProfile = ({ onNavigate, onLogout }: FarmerProfileProps) => {
   const currency = wallet?.currency || "RWF";
 
   return (
-    <section className="w-full max-w-[680px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="app-page-header">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -205,9 +205,9 @@ const FarmerProfile = ({ onNavigate, onLogout }: FarmerProfileProps) => {
         </button>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {!loading && walletPreview.length === 0 && (
-          <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] p-5 text-sm text-[var(--muted)]">
+          <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] p-5 text-sm text-[var(--muted)] lg:col-span-2">
             No wallet activity yet. Your batch payouts and pending batch payments will appear here.
           </div>
         )}
@@ -257,7 +257,7 @@ const FarmerProfile = ({ onNavigate, onLogout }: FarmerProfileProps) => {
         </button>
       </div>
 
-      <nav className="mt-2 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
+      <nav className="app-bottom-nav mt-2 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Home", active: false, target: "dashboard" as const },
           { label: "Inventory", active: false, target: "inventory" as const },

@@ -2,7 +2,6 @@ const Batch = require("../models/Batch");
 const BuyerOrder = require("../models/BuyerOrder");
 const Dispute = require("../models/Dispute");
 const PayoutAudit = require("../models/PayoutAudit");
-const { User } = require("../models/User");
 const { releaseEscrowPayoutForOrder } = require("../services/adminPayoutService");
 const { success, failure } = require("../utils/response");
 
@@ -290,12 +289,115 @@ const deriveDisputes = (orders) => {
       updatedAt: (d(order.updatedAt) || created).toISOString(),
     });
   }
-  if (rows.length) return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  return [
-    { id: "kayonza-7729", orderId: "kayonza-7729", orderNumber: "#7729", hubId: "HU-EAST-18", hubName: "Kayonza Hub", region: "Eastern Province", commodity: "Maize", issue: "Moisture content mismatch (+4%)", anomalyType: "quality_variance", severity: "high", severityLabel: "High Severity", reviewState: "pending escalation", confidenceScore: 94.2, aiDetectedGrade: "A", issueDeltaPercent: 4, updatedAt: new Date().toISOString() },
-    { id: "musanze-8104", orderId: "musanze-8104", orderNumber: "#8104", hubId: "HU-NORTH-04", hubName: "Musanze Hub", region: "Northern Province", commodity: "Arabica Beans", issue: "Grade level (A1 vs B1) disagreement", anomalyType: "quality_variance", severity: "medium", severityLabel: "Pending Escalation", reviewState: "standard review", confidenceScore: 91.7, aiDetectedGrade: "A", issueDeltaPercent: 3, updatedAt: new Date().toISOString() },
-    { id: "nyagatare-9021", orderId: "nyagatare-9021", orderNumber: "#9021", hubId: "HU-EAST-31", hubName: "Nyagatare Hub", region: "Eastern Province", commodity: "Rice", issue: "Net weight variance (>50kg)", anomalyType: "weight_variance", severity: "low", severityLabel: "Standard Review", reviewState: "standard review", confidenceScore: 88.3, aiDetectedGrade: "B", issueDeltaPercent: 2, updatedAt: new Date().toISOString() },
+  return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+};
+
+const inspectionAgeMinutes = (order, now) => {
+  if (String(order?.trackingStage || "").toLowerCase() !== "hub_inspection") return 0;
+  const start =
+    d(order?.paymentConfirmedAt)
+    || d(order?.escrowFundedAt)
+    || d(order?.createdAt);
+  if (!start) return 0;
+  return clamp(Math.round((now.getTime() - start.getTime()) / 60000), 0, 24 * 60);
+};
+
+const paymentMethodLabel = (method) => {
+  const normalized = String(method || "").trim().toLowerCase();
+  if (normalized === "card") return "Card";
+  if (normalized === "momo") return "MTN Mobile Money";
+  if (normalized === "airtel") return "Airtel Money";
+  if (normalized === "bank") return "Bank Transfer";
+  return "Card";
+};
+
+const toAdminOrderSummary = (order) => ({
+  id: String(order._id),
+  orderNumber: order.orderNumber || null,
+  title: order.title || "Produce Batch",
+  cropKey: order.cropKey || "mixed",
+  cropNames: Array.isArray(order.cropNames) ? order.cropNames : [],
+  farmerName: order.farmerName || "Farmer",
+  buyerName: order.buyerName || "Buyer",
+  destination: order.destination || "Kigali Central Aggregator",
+  status: order.status || "active",
+  paymentStatus: order.paymentStatus || "pending",
+  trackingStage: order.trackingStage || "awaiting_payment",
+  image: order.image || null,
+  totalWeight: n(order.totalWeight),
+  totalPrice: n(order.totalPrice),
+  pricePerKg: n(order.pricePerKg),
+  currency: String(order.currency || "RWF").toUpperCase(),
+  depositPercent: typeof order.depositPercent === "number" ? order.depositPercent : 0.6,
+  depositAmount: n(order.depositAmount),
+  balanceDue: n(order.balanceDue),
+  serviceFee: n(order.serviceFee),
+  insuranceFee: n(order.insuranceFee),
+  amountDueToday: n(order.amountDueToday),
+  paymentMethod: order.paymentMethod || "card",
+  escrowStatus: order.escrowStatus || "awaiting_payment",
+  estimatedArrivalAt: d(order.estimatedArrivalAt)?.toISOString() || null,
+  trackingUpdatedAt: d(order.trackingUpdatedAt)?.toISOString() || null,
+  paymentConfirmedAt: d(order.paymentConfirmedAt)?.toISOString() || null,
+  escrowFundedAt: d(order.escrowFundedAt)?.toISOString() || null,
+  escrowReleasedAt: d(order.escrowReleasedAt)?.toISOString() || null,
+  deliveryConfirmedAt: d(order.deliveryConfirmedAt)?.toISOString() || null,
+  createdAt: d(order.createdAt)?.toISOString() || null,
+  updatedAt: d(order.updatedAt)?.toISOString() || null,
+});
+
+const toAdminOrderTimeline = (order) => {
+  const createdAt = d(order.createdAt) || new Date();
+  const trackingUpdatedAt = d(order.trackingUpdatedAt) || new Date();
+  const isPaymentConfirmed = String(order.paymentStatus || "").toLowerCase() === "deposit_paid";
+  const stages = [
+    {
+      key: "payment_confirmed",
+      title: "Payment Confirmed",
+      detail: isPaymentConfirmed
+        ? `Deposit secured in escrow via ${String(order.paymentMethod || "card").toUpperCase()}`
+        : `Awaiting buyer deposit payment via ${paymentMethodLabel(order.paymentMethod)}`,
+      time: isPaymentConfirmed ? createdAt.toLocaleString() : "Pending payment",
+    },
+    {
+      key: "farmer_dispatching",
+      title: "Farmer Delivering to Hub",
+      detail: `Farmer: ${order.farmerName || "Farmer"}`,
+      time: new Date(createdAt.getTime() + 2 * 60 * 60 * 1000).toLocaleString(),
+    },
+    {
+      key: "hub_inspection",
+      title: "Hub Inspection Underway",
+      detail: "Quality and weight verification at the aggregation hub",
+      time: "In Progress - Processing",
+    },
+    {
+      key: "released_for_delivery",
+      title: "Released for Delivery",
+      detail: "",
+      time: "Pending quality certificate issuance",
+    },
+    {
+      key: "delivered",
+      title: "Delivered",
+      detail: "Delivery confirmed by buyer",
+      time: d(order.completedAt) ? d(order.completedAt).toLocaleString() : "Pending buyer confirmation",
+    },
   ];
+  const stageOrder = stages.map((item) => item.key);
+  const currentIndex = isPaymentConfirmed ? Math.max(0, stageOrder.indexOf(order.trackingStage || "payment_confirmed")) : -1;
+
+  return stages.map((stage, index) => ({
+    ...stage,
+    status: !isPaymentConfirmed
+      ? "pending"
+      : index < currentIndex
+        ? "done"
+        : index === currentIndex
+          ? (String(order.status || "").toLowerCase() === "cancelled" ? "pending" : "active")
+          : "pending",
+    updatedAt: trackingUpdatedAt.toISOString(),
+  }));
 };
 
 const getAdminOverview = async (req, res) => {
@@ -306,19 +408,20 @@ const getAdminOverview = async (req, res) => {
     const currentStart = new Date(now.getTime() - windowMs);
     const prevStart = new Date(currentStart.getTime() - windowMs);
 
-    const [orders, batches, users] = await Promise.all([
+    const [orders, batches] = await Promise.all([
       BuyerOrder.find({}).sort({ createdAt: -1 }).lean(),
       Batch.find({}).sort({ createdAt: -1 }).lean(),
-      User.find({}).select("_id").lean(),
     ]);
 
     const activeOrders = orders.filter((o) => String(o.status || "").toLowerCase() !== "cancelled");
     const currentOrders = activeOrders.filter((o) => within(o.createdAt, currentStart, now));
     const prevOrders = activeOrders.filter((o) => within(o.createdAt, prevStart, currentStart));
+    const currentBatches = batches.filter((b) => within(b.createdAt, currentStart, now));
+    const prevBatches = batches.filter((b) => within(b.createdAt, prevStart, currentStart));
 
     const tradeCurrent = currentOrders.reduce((s, o) => s + n(o.totalPrice), 0);
     const tradePrev = prevOrders.reduce((s, o) => s + n(o.totalPrice), 0);
-    const escrowCurrentRaw = activeOrders
+    const escrowCurrentRaw = currentOrders
       .filter((o) => String(o.escrowStatus || "").toLowerCase() === "funded")
       .reduce((s, o) => s + (n(o.depositAmount) || n(o.amountDueToday)), 0);
     const escrowPrevRaw = prevOrders
@@ -329,8 +432,12 @@ const getAdminOverview = async (req, res) => {
     const disputes = disputeDocs
       .filter((item) => !["resolved", "dismissed"].includes(String(item.status || "").toLowerCase()))
       .map(toDisputeDto);
-    const disputeRate = activeOrders.length ? (disputes.length / activeOrders.length) * 100 : 2.4;
-    const aiAccuracy = clamp(95 - disputeRate * 0.4, 89, 98.8);
+    const currentDisputes = disputes.filter((item) => within(item.updatedAt, currentStart, now));
+    const prevDisputes = disputes.filter((item) => within(item.updatedAt, prevStart, currentStart));
+    const currentDisputeRate = currentOrders.length ? (currentDisputes.length / currentOrders.length) * 100 : 0;
+    const prevDisputeRate = prevOrders.length ? (prevDisputes.length / prevOrders.length) * 100 : 0;
+    const aiAccuracy = currentOrders.length ? clamp(95 - currentDisputeRate * 0.4, 89, 98.8) : 0;
+    const prevAiAccuracy = prevOrders.length ? clamp(95 - prevDisputeRate * 0.4, 89, 98.8) : 0;
 
     const userSetCurrent = new Set();
     const userSetPrev = new Set();
@@ -342,31 +449,34 @@ const getAdminOverview = async (req, res) => {
       if (o.buyer) userSetPrev.add(String(o.buyer));
       if (o.farmer) userSetPrev.add(String(o.farmer));
     });
-    batches.filter((b) => within(b.createdAt, currentStart, now)).forEach((b) => b.farmer && userSetCurrent.add(String(b.farmer)));
-    batches.filter((b) => within(b.createdAt, prevStart, currentStart)).forEach((b) => b.farmer && userSetPrev.add(String(b.farmer)));
-    const activeUsers = userSetCurrent.size || users.length || 12400;
-    const prevActiveUsers = userSetPrev.size || Math.max(1, Math.round(activeUsers * 0.87));
+    currentBatches.forEach((b) => b.farmer && userSetCurrent.add(String(b.farmer)));
+    prevBatches.forEach((b) => b.farmer && userSetPrev.add(String(b.farmer)));
+    const activeUsers = userSetCurrent.size;
+    const prevActiveUsers = userSetPrev.size;
 
     const hubMap = new Map();
     const touchHub = (meta) => {
       if (!hubMap.has(meta.key)) hubMap.set(meta.key, { ...meta, throughputKg: 0, tradeVolumeRwf: 0, activeOrders: 0, disputes: 0 });
       return hubMap.get(meta.key);
     };
-    batches.forEach((b) => {
+    currentBatches.forEach((b) => {
       const h = touchHub(hubMeta(b.destination, ""));
       h.throughputKg += n(b.totalWeight);
       h.tradeVolumeRwf += n(b.totalPrice);
     });
-    activeOrders.forEach((o) => {
+    currentOrders.forEach((o) => {
       const h = touchHub(hubMeta(o.destination, o.title));
       h.throughputKg += n(o.totalWeight);
       h.tradeVolumeRwf += n(o.totalPrice);
       if (String(o.status || "").toLowerCase() === "active") h.activeOrders += 1;
-      if (String(o.paymentStatus || "").toLowerCase() === "failed" || String(o.escrowStatus || "").toLowerCase() === "release_failed") h.disputes += 1;
+    });
+    currentDisputes.forEach((item) => {
+      const h = touchHub(hubMeta(item.hubName, item.commodity));
+      h.disputes += 1;
     });
     const hubs = Array.from(hubMap.values()).sort((a, b) => b.throughputKg - a.throughputKg);
     const maxThroughput = Math.max(1, ...hubs.map((h) => h.throughputKg || 0));
-    const hubLocations = (hubs.length ? hubs : HUBS.slice(0, 4)).slice(0, 8).map((h, i) => {
+    const hubLocations = hubs.slice(0, 8).map((h) => {
       const ratio = (h.throughputKg || 0) / maxThroughput;
       const activityLevel = ratio >= 0.67 ? "high" : ratio >= 0.34 ? "medium" : "low";
       return {
@@ -374,31 +484,34 @@ const getAdminOverview = async (req, res) => {
         hubId: h.id,
         region: h.region,
         district: h.district,
-        activityLevel: hubs.length ? activityLevel : i === 0 ? "high" : i === 1 ? "medium" : "low",
-        score: round((hubs.length ? ratio : i === 0 ? 0.86 : i === 1 ? 0.57 : 0.29) * 100, 1),
-        throughputKg: Math.round(h.throughputKg || (i === 0 ? 6400 : i === 1 ? 3900 : 2100)),
-        tradeVolumeRwf: Math.round(h.tradeVolumeRwf || (i === 0 ? 84500000 : i === 1 ? 44200000 : 18000000)),
+        activityLevel,
+        score: round(ratio * 100, 1),
+        throughputKg: Math.round(h.throughputKg),
+        tradeVolumeRwf: Math.round(h.tradeVolumeRwf),
         plot: { x: h.x, y: h.y },
       };
     });
 
-    const recentEscalations = disputes.slice(0, 5).map((x, i) => ({
+    const recentEscalations = currentDisputes.slice(0, 5).map((x) => ({
       id: x.id,
-      title: x.severity === "high" ? `Escrow Conflict ${x.orderNumber}` : i % 2 ? "Trade Completed" : "Quality Review Raised",
-      subtitle: `${x.hubName} • ${x.commodity}`,
+      title: x.severity === "high" ? `Escrow dispute ${x.orderNumber}` : `Quality dispute ${x.orderNumber}`,
+      subtitle: `${x.hubName} | ${x.commodity}`,
       severity: x.severity === "high" ? "urgent" : x.severity === "medium" ? "review" : "info",
       issue: x.issue,
       occurredAt: x.updatedAt,
     }));
 
+    const hasData = currentOrders.length > 0 || currentBatches.length > 0 || currentDisputes.length > 0;
+
     return res.status(200).json(success({
       screen: "nationwide_overview",
+      hasData,
       header: { title: "Nationwide Overview", subtitle: "Rwanda D2P Command Center", live: true },
       window: { active: key in WINDOW_MS ? key : "live", options: Object.keys(WINDOW_MS) },
       metrics: [
-        { id: "trade_volume", label: "Trade Volume", value: Math.round(tradeCurrent || 1200000000), display: compact(tradeCurrent || 1200000000), unit: "RWF", changePct: round(pctChange(tradeCurrent || 1200000000, tradePrev || 1068000000), 1) },
-        { id: "escrow_locked", label: "Escrow Locked", value: Math.round(escrowCurrentRaw || 450000000), display: compact(escrowCurrentRaw || 450000000), unit: "RWF", changePct: round(pctChange(escrowCurrentRaw || 450000000, escrowPrevRaw || 427000000), 1) },
-        { id: "ai_accuracy", label: "AI Accuracy", value: round(activeOrders.length ? aiAccuracy : 94.2, 1), display: `${round(activeOrders.length ? aiAccuracy : 94.2, 1)}%`, unit: "%", changePct: 0.8 },
+        { id: "trade_volume", label: "Trade Volume", value: Math.round(tradeCurrent), display: compact(tradeCurrent), unit: "RWF", changePct: round(pctChange(tradeCurrent, tradePrev), 1) },
+        { id: "escrow_locked", label: "Escrow Locked", value: Math.round(escrowCurrentRaw), display: compact(escrowCurrentRaw), unit: "RWF", changePct: round(pctChange(escrowCurrentRaw, escrowPrevRaw), 1) },
+        { id: "ai_accuracy", label: "AI Accuracy", value: round(aiAccuracy, 1), display: `${round(aiAccuracy, 1)}%`, unit: "%", changePct: round(pctChange(aiAccuracy, prevAiAccuracy), 1) },
         { id: "active_users", label: "Active Users", value: activeUsers, display: compact(activeUsers), unit: "", changePct: round(pctChange(activeUsers, prevActiveUsers), 1) },
       ],
       hubActivity: { title: "Hub Activity Levels", locations: hubLocations },
@@ -439,6 +552,7 @@ const getAdminEscrowAudit = async (req, res) => {
       const s = ledgerStatus(o);
       return {
         id: String(o._id),
+        orderId: String(o._id),
         transactionId: o.orderNumber || `TXN-${String(o._id).slice(-6).toUpperCase()}`,
         orderNumber: o.orderNumber || null,
         title: o.title || "Produce Batch",
@@ -457,6 +571,7 @@ const getAdminEscrowAudit = async (req, res) => {
         status: s,
         paymentStatus: String(o.paymentStatus || "pending").toLowerCase(),
         escrowStatus: String(o.escrowStatus || "awaiting_payment").toLowerCase(),
+        trackingStage: String(o.trackingStage || "awaiting_payment").toLowerCase(),
         discrepancyReason: s === "discrepancy" ? (String(o.escrowStatus || "").toLowerCase() === "release_failed" ? "Escrow release failed during payout processing" : "Deposit payment failed reconciliation") : null,
         createdAt: (d(o.createdAt) || new Date()).toISOString(),
         updatedAt: (d(o.updatedAt) || d(o.createdAt) || new Date()).toISOString(),
@@ -494,14 +609,16 @@ const getAdminEscrowAudit = async (req, res) => {
       errorMessage: audit.errorMessage || null,
       processedAt: (d(audit.processedAt) || d(audit.createdAt) || new Date()).toISOString(),
     }));
+    const hasData = ledger.length > 0 || recentPayoutAudits.length > 0;
 
     return res.status(200).json(success({
       screen: "escrow_audit",
+      hasData,
       header: { title: "Escrow & Audit", subtitle: "Live ledger", live: true },
       summary: {
-        totalInEscrow: totalInEscrow || 72400000,
-        totalInEscrowChangePct: round(pctChange(totalInEscrow || 72400000, Math.round((totalInEscrow || 72400000) * 0.89)), 1),
-        pendingPayouts: pendingPayouts || 14800000,
+        totalInEscrow,
+        totalInEscrowChangePct: 0,
+        pendingPayouts,
         pendingBatchCount,
         eligibleBatchPayoutCount,
         discrepancyCount,
@@ -537,18 +654,29 @@ const getAdminHubDisputes = async (req, res) => {
 
     const activeOrders = orders.filter((o) => String(o.status || "").toLowerCase() !== "cancelled");
     const disputeDocs = await loadPersistentDisputes(activeOrders);
-    const disputes = disputeDocs
+    const unresolvedDisputes = disputeDocs
       .map(toDisputeDto)
-      .filter((x) => !["resolved", "dismissed"].includes(x.reviewState))
-      .filter((x) => {
-        if (severity !== "all" && x.severity !== severity) return false;
-        if (!q) return true;
-        return [x.hubName, x.hubId, x.commodity, x.issue, x.orderNumber].join(" ").toLowerCase().includes(q);
-      });
+      .filter((x) => !["resolved", "dismissed"].includes(x.reviewState));
+    const disputes = unresolvedDisputes.filter((x) => {
+      if (severity !== "all" && x.severity !== severity) return false;
+      if (!q) return true;
+      return [x.hubName, x.hubId, x.commodity, x.issue, x.orderNumber].join(" ").toLowerCase().includes(q);
+    });
 
     const hubStatsMap = new Map();
     const touch = (h) => {
-      if (!hubStatsMap.has(h.id)) hubStatsMap.set(h.id, { hubId: h.id, hubName: h.name, region: h.region, throughputKg: 0, batchCount: 0, activeDisputes: 0 });
+      if (!hubStatsMap.has(h.id)) {
+        hubStatsMap.set(h.id, {
+          hubId: h.id,
+          hubName: h.name,
+          region: h.region,
+          throughputKg: 0,
+          batchCount: 0,
+          activeDisputes: 0,
+          inspectionTotalMinutes: 0,
+          inspectionSamples: 0,
+        });
+      }
       return hubStatsMap.get(h.id);
     };
     batches.forEach((b) => {
@@ -556,8 +684,17 @@ const getAdminHubDisputes = async (req, res) => {
       row.throughputKg += n(b.totalWeight);
       row.batchCount += 1;
     });
-    disputes.forEach((x) => {
-      const row = touch(hubMeta(x.hubName, ""));
+    const now = new Date();
+    activeOrders.forEach((order) => {
+      const row = touch(hubMeta(order.destination, order.title));
+      const minutes = inspectionAgeMinutes(order, now);
+      if (minutes > 0) {
+        row.inspectionTotalMinutes += minutes;
+        row.inspectionSamples += 1;
+      }
+    });
+    unresolvedDisputes.forEach((x) => {
+      const row = touch(hubMeta(x.hubName, x.commodity));
       row.activeDisputes += 1;
     });
 
@@ -565,17 +702,20 @@ const getAdminHubDisputes = async (req, res) => {
       .map((r) => ({
         ...r,
         throughputKg: Math.round(r.throughputKg),
-        inspectionMinutes: clamp(34 + r.activeDisputes * 7 + (hash(r.hubId) % 8), 28, 90),
+        inspectionMinutes: r.inspectionSamples ? Math.round(r.inspectionTotalMinutes / r.inspectionSamples) : 0,
       }))
       .sort((a, b) => b.throughputKg - a.throughputKg)
       .slice(0, 12);
+    const filteredHubStats = hubStats.filter((hub) => {
+      if (!q) return true;
+      return [hub.hubName, hub.hubId, hub.region].join(" ").toLowerCase().includes(q);
+    });
 
     const avgInspectionMinutes = hubStats.length
       ? Math.round(hubStats.reduce((s, r) => s + r.inspectionMinutes, 0) / hubStats.length)
-      : 42;
-    const disputeRate = activeOrders.length ? (disputes.length / activeOrders.length) * 100 : 2.4;
+      : 0;
+    const disputeRate = activeOrders.length ? (unresolvedDisputes.length / activeOrders.length) * 100 : 0;
 
-    const now = new Date();
     const startToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const startYesterday = new Date(startToday.getTime() - 86400000);
     const todayThroughput = activeOrders.filter((o) => within(o.createdAt, startToday, now)).reduce((s, o) => s + n(o.totalWeight), 0);
@@ -591,35 +731,88 @@ const getAdminHubDisputes = async (req, res) => {
       weeklyTrend[idx].throughputKg += n(o.totalWeight);
       weeklyTrend[idx].orderCount += 1;
     });
-    if (weeklyTrend.every((p) => p.throughputKg === 0)) {
-      [5200, 6100, 5400, 8300, 9100, 4800, 8700].forEach((v, i) => {
-        weeklyTrend[i].throughputKg = v;
-        weeklyTrend[i].orderCount = Math.max(1, Math.round(v / 2200));
-      });
-    }
+    const hasTrendData = weeklyTrend.some((point) => point.throughputKg > 0);
+    const hasData = filteredHubStats.length > 0 || unresolvedDisputes.length > 0 || hasTrendData;
 
     return res.status(200).json(success({
       screen: "hub_disputes",
-      header: { title: "Hub & Disputes", subtitle: "Admin Dashboard • Rwanda Nationwide", live: true },
+      hasData,
       summary: {
-        avgInspectionMinutes: avgInspectionMinutes || 42,
-        avgInspectionChangePct: -5,
-        disputeRate: round(disputeRate || 2.4, 1),
-        disputeRateChangePct: 0.1,
-        dailyThroughputKg: Math.round(todayThroughput || 12400),
-        dailyThroughputChangePct: round(pctChange(todayThroughput || 12400, yesterdayThroughput || 11070), 1),
+        avgInspectionMinutes,
+        avgInspectionChangePct: 0,
+        disputeRate: round(disputeRate, 1),
+        disputeRateChangePct: 0,
+        dailyThroughputKg: Math.round(todayThroughput),
+        dailyThroughputChangePct: round(pctChange(todayThroughput, yesterdayThroughput), 1),
       },
       weeklyTrend: weeklyTrend.map((p) => ({ ...p, throughputKg: round(p.throughputKg, 1) })),
       tabs: { active: tab === "hub_stats" ? "hub_stats" : "quality_disputes", options: [{ key: "hub_stats", label: "Hub Stats" }, { key: "quality_disputes", label: "Quality Disputes" }] },
       filters: { q, severity, availableSeverities: ["all", "high", "medium", "low"] },
       unresolvedCount: disputes.length,
       disputes: disputes.slice(0, 50),
-      hubStats,
+      hubStats: filteredHubStats,
+      header: { title: "Hub & Disputes", subtitle: "Admin Dashboard | Rwanda Nationwide", live: true },
       lastSynced: new Date().toISOString(),
     }));
   } catch (error) {
     console.error("Admin hub disputes error:", error);
     return res.status(500).json(failure("INTERNAL_ERROR", "Failed to load hub disputes"));
+  }
+};
+
+const advanceAdminOrderTracking = async (req, res) => {
+  try {
+    const order = await BuyerOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json(failure("NOT_FOUND", "Order not found"));
+    }
+
+    if (String(order.paymentStatus || "").toLowerCase() !== "deposit_paid" || String(order.escrowStatus || "").toLowerCase() !== "funded") {
+      return res.status(400).json(failure("ESCROW_NOT_READY", "Order payment must be funded before admin delivery actions"));
+    }
+
+    const currentStage = String(order.trackingStage || "").toLowerCase();
+    if (currentStage === "farmer_dispatching") {
+      order.trackingStage = "hub_inspection";
+    } else if (currentStage === "hub_inspection") {
+      order.trackingStage = "released_for_delivery";
+    } else if (currentStage !== "released_for_delivery" && currentStage !== "delivered") {
+      return res.status(400).json(failure("INVALID_TRACKING_STAGE", "This order is not ready for an admin stage update"));
+    }
+
+    order.trackingUpdatedAt = new Date();
+    await order.save();
+
+    return res.status(200).json(success({
+      order: {
+        id: String(order._id),
+        orderNumber: order.orderNumber || null,
+        trackingStage: order.trackingStage || "awaiting_payment",
+        escrowStatus: order.escrowStatus || "awaiting_payment",
+        updatedAt: (d(order.trackingUpdatedAt) || new Date()).toISOString(),
+      },
+    }));
+  } catch (error) {
+    console.error("Admin advance order tracking error:", error);
+    return res.status(500).json(failure("INTERNAL_ERROR", "Failed to update order tracking"));
+  }
+};
+
+const getAdminOrderById = async (req, res) => {
+  try {
+    const order = await BuyerOrder.findById(req.params.id).lean();
+    if (!order) {
+      return res.status(404).json(failure("NOT_FOUND", "Order not found"));
+    }
+
+    return res.status(200).json(success({
+      order: toAdminOrderSummary(order),
+      timeline: toAdminOrderTimeline(order),
+      hub: hubMeta(order.destination, order.title),
+    }));
+  } catch (error) {
+    console.error("Admin order detail error:", error);
+    return res.status(500).json(failure("INTERNAL_ERROR", "Failed to load order detail"));
   }
 };
 
@@ -806,6 +999,8 @@ module.exports = {
   getAdminOverview,
   getAdminEscrowAudit,
   getAdminHubDisputes,
+  advanceAdminOrderTracking,
+  getAdminOrderById,
   releaseAdminBatchPayouts,
   createAdminDispute,
   reviewAdminDispute,

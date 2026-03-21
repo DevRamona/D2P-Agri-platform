@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { ViewMode } from "../types";
-import { getBatchById, type Batch, type Product } from "../api/farmer";
+import { advanceBatchDelivery, getBatchById, type Batch, type Product } from "../api/farmer";
 
 interface BatchTrackerProps {
   onNavigate?: (view: ViewMode) => void;
@@ -12,6 +12,7 @@ const BatchTracker = ({ onNavigate }: BatchTrackerProps) => {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingDelivery, setUpdatingDelivery] = useState(false);
 
   useEffect(() => {
     const fetchBatch = async () => {
@@ -40,7 +41,7 @@ const BatchTracker = ({ onNavigate }: BatchTrackerProps) => {
 
   if (loading) {
     return (
-      <div className="w-full max-w-[520px] h-screen grid place-items-center text-[var(--muted)]">
+      <div className="app-screen app-screen-comfort grid min-h-[40vh] place-items-center text-[var(--muted)]">
         <p className="animate-pulse">Loading tracker...</p>
       </div>
     );
@@ -48,7 +49,7 @@ const BatchTracker = ({ onNavigate }: BatchTrackerProps) => {
 
   if (error || !batch) {
     return (
-      <div className="w-full max-w-[520px] py-12 text-center text-[var(--muted)]">
+      <div className="app-screen app-screen-comfort py-12 text-center text-[var(--muted)]">
         <p>{error || "Batch not found"}</p>
         <button
           onClick={() => onNavigate?.("dashboard")}
@@ -70,10 +71,24 @@ const BatchTracker = ({ onNavigate }: BatchTrackerProps) => {
   // Get crop type from first product
   const mainCrop = (batch.products[0]?.product as Product)?.name || "Mix";
   const hubLocation = (batch as any).destination || "Kigali Central Hub"; // fall back if destination missing
+  const deliveryOrder = batch.deliveryOrder || null;
+  const canDispatchToHub = deliveryOrder?.trackingStage === "payment_confirmed";
+  const deliveryStageLabel =
+    deliveryOrder?.trackingStage === "payment_confirmed"
+      ? "Ready for farmer dispatch"
+      : deliveryOrder?.trackingStage === "farmer_dispatching"
+        ? "Farmer delivering to hub"
+        : deliveryOrder?.trackingStage === "hub_inspection"
+          ? "Hub inspection underway"
+          : deliveryOrder?.trackingStage === "released_for_delivery"
+            ? "Released for delivery"
+            : deliveryOrder?.trackingStage === "delivered"
+              ? "Buyer confirmed delivery"
+              : "Waiting for buyer payment";
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="app-page-header">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -262,10 +277,32 @@ const BatchTracker = ({ onNavigate }: BatchTrackerProps) => {
               </div>
               <div className="flex items-center justify-between text-white/70">
                 <span>Inspection Status</span>
-                <span className="text-[var(--accent)]">In Progress</span>
+                <span className="text-[var(--accent)]">{deliveryStageLabel}</span>
               </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            disabled={!canDispatchToHub || updatingDelivery}
+            className="w-full rounded-[16px] bg-[var(--accent)] px-4 py-4 text-sm font-semibold text-[#0b1307] disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={async () => {
+              if (!id || !canDispatchToHub) return;
+              try {
+                setUpdatingDelivery(true);
+                setError(null);
+                const result = await advanceBatchDelivery(id);
+                setBatch((prev) => (prev ? { ...prev, deliveryOrder: result.order } : prev));
+              } catch (err) {
+                console.error("Failed to advance farmer delivery", err);
+                setError("Could not update farmer delivery status.");
+              } finally {
+                setUpdatingDelivery(false);
+              }
+            }}
+          >
+            {updatingDelivery ? "Updating Delivery..." : canDispatchToHub ? "Mark As Delivering To Hub" : "Waiting For Admin / Buyer Step"}
+          </button>
 
           <button className="w-full rounded-[16px] bg-white px-4 py-4 text-sm font-semibold text-[#0b1307] shadow-[0_12px_24px_rgba(0,0,0,0.2)]">
             Contact Support for Batch #{batch._id.slice(-6).toUpperCase()}

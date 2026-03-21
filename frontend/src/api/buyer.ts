@@ -83,6 +83,14 @@ export type BuyerOrder = {
   stripePaymentIntentId: string | null;
   stripeTransferId: string | null;
   stripePaymentStatus: string | null;
+  mobileMoneyProvider: string | null;
+  mobileMoneyProviderCode: string | null;
+  mobileMoneyReference: string | null;
+  mobileMoneyExternalId: string | null;
+  mobileMoneyTransactionId: string | null;
+  mobileMoneyStatus: string | null;
+  mobileMoneyPayerMsisdn: string | null;
+  mobileMoneyLastWebhookAt: string | null;
   estimatedArrivalAt: string | null;
   trackingUpdatedAt: string | null;
   paymentConfirmedAt: string | null;
@@ -193,6 +201,11 @@ export const getBuyerOrders = (params?: { status?: string }) => {
 
 export const getBuyerOrderById = (orderId: string) =>
   apiFetch<BuyerOrderDetailResponse>(`/buyer/orders/${orderId}`);
+
+export const advanceBuyerOrderTracking = (orderId: string) =>
+  apiFetch<BuyerOrderDetailResponse>(`/buyer/orders/${orderId}/advance-tracking`, {
+    method: "POST",
+  });
 
 export const releaseBuyerOrderEscrow = (orderId: string) =>
   apiFetch<BuyerOrderDetailResponse>(`/buyer/orders/${orderId}/release-escrow`, {

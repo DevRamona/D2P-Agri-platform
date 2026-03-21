@@ -22,8 +22,8 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
 
   if (!batch) {
     return (
-      <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-        <header className="flex items-center justify-between">
+      <section className="app-screen app-screen-comfort flex flex-col gap-6">
+        <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -56,8 +56,8 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
   const listedDate = batch.createdAt ? new Date(batch.createdAt).toLocaleDateString() : "--";
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -68,7 +68,7 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div className="text-center">
+        <div className="min-w-0 text-center">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-[2px] text-[var(--accent)]">Farmer Batch</p>
           <p className="m-0 text-base font-semibold truncate max-w-[220px]">{batch.title}</p>
         </div>
@@ -217,7 +217,7 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
         </div>
       </div>
 
-      <div className="flex gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <button className="flex-1 rounded-[16px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold" type="button">
           Contact
         </button>

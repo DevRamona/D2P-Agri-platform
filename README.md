@@ -89,14 +89,21 @@ LLM_TIMEOUT_MS=20000
 LLM_TEMPERATURE=0.3
 LLM_LOW_CONFIDENCE_THRESHOLD=0.65
 
-# Buyer Payments (Stripe)
+# Buyer Payments (Flutterwave Mobile Money + Stripe Card)
+FLUTTERWAVE_SECRET_KEY=FLWSECK_TEST_xxx_or_live_secret
+FLUTTERWAVE_SECRET_HASH=flutterwave_webhook_secret_hash
+FLUTTERWAVE_API_BASE_URL=https://api.flutterwave.com/v3
+BACKEND_PUBLIC_URL=https://your-backend-domain
+FRONTEND_PUBLIC_URL=https://your-frontend-domain
+
+# Card checkout fallback (Stripe)
 STRIPE_SECRET_KEY=sk_live_or_sk_test_key
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_CURRENCY=rwf
 STRIPE_CHECKOUT_SUCCESS_URL=https://your-frontend-domain/buyer/order-tracking?orderId={ORDER_ID}&checkout=success&session_id={CHECKOUT_SESSION_ID}
 STRIPE_CHECKOUT_CANCEL_URL=https://your-frontend-domain/buyer/order-review?orderId={ORDER_ID}&checkout=cancelled
 
-# Optional local testing only (defaults are false)
+# Optional local testing only
 ALLOW_MOBILE_MONEY_STUB=false
 
 # Upload persistence (privacy-first defaults)
@@ -113,6 +120,13 @@ Run backend:
 
 ```bash
 npm run dev
+```
+
+Backend API docs:
+
+```text
+Swagger UI: http://localhost:4000/docs
+OpenAPI JSON: http://localhost:4000/docs/openapi.json
 ```
 
 ## 2) ML Service Setup (FastAPI)

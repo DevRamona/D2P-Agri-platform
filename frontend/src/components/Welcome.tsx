@@ -7,7 +7,7 @@ interface WelcomeProps {
 const Welcome = ({ onGetStarted }: WelcomeProps) => {
   return (
     <section
-      className="w-full max-w-[520px] lg:max-w-[600px] flex flex-col gap-5 animate-[rise_0.6s_ease_both]"
+      className="app-screen app-screen-auth flex flex-col gap-5"
       aria-labelledby="welcome-title"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -53,7 +53,7 @@ const Welcome = ({ onGetStarted }: WelcomeProps) => {
           onClick={() => onGetStarted("register")}
         >
           Create Account
-          <span aria-hidden="true">→</span>
+          <span aria-hidden="true">&rarr;</span>
         </button>
 
         <p className="m-0 text-center text-sm font-semibold text-[var(--muted)]">

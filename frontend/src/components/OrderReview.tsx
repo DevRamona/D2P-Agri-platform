@@ -24,8 +24,91 @@ const resolveImageUrl = (image: string | null) => {
 };
 
 type PaymentMethod = "card" | "momo" | "airtel" | "bank";
+type MobileMoneyMethod = Extract<PaymentMethod, "momo" | "airtel">;
+type PaymentOption = {
+  value: PaymentMethod;
+  badge: string;
+  badgeClassName: string;
+  label: string;
+  description: string;
+  disabled: boolean;
+};
+
+const MOBILE_MONEY_ENABLED = String(import.meta.env.VITE_ENABLE_MOBILE_MONEY || "true").toLowerCase() === "true";
 const MOBILE_MONEY_STUB_ENABLED = String(import.meta.env.VITE_ENABLE_STUB_MOBILE_MONEY || "false").toLowerCase() === "true";
 const BANK_TRANSFER_ENABLED = String(import.meta.env.VITE_ENABLE_BANK_TRANSFER || "false").toLowerCase() === "true";
+const PRIMARY_MOBILE_MONEY_METHOD: MobileMoneyMethod =
+  String(import.meta.env.VITE_PRIMARY_PAYMENT_METHOD || "momo").toLowerCase() === "airtel" ? "airtel" : "momo";
+const SECONDARY_MOBILE_MONEY_METHOD: MobileMoneyMethod =
+  PRIMARY_MOBILE_MONEY_METHOD === "momo" ? "airtel" : "momo";
+
+const getPaymentOptionConfig = (method: PaymentMethod): PaymentOption => {
+  if (method === "momo") {
+    return {
+      value: "momo",
+      badge: "MoMo",
+      badgeClassName: "bg-yellow-400 text-black",
+      label: "MTN Mobile Money",
+      description:
+        !MOBILE_MONEY_ENABLED
+          ? "Disabled in this environment"
+          : MOBILE_MONEY_STUB_ENABLED && PRIMARY_MOBILE_MONEY_METHOD === "momo"
+            ? "Primary checkout path in stub/test mode"
+            : MOBILE_MONEY_STUB_ENABLED
+              ? "Alternative mobile money option in stub/test mode"
+              : "Collected through Flutterwave",
+      disabled: !MOBILE_MONEY_ENABLED,
+    };
+  }
+
+  if (method === "airtel") {
+    return {
+      value: "airtel",
+      badge: "Airtel",
+      badgeClassName: "bg-red-500 text-white",
+      label: "Airtel Money",
+      description:
+        !MOBILE_MONEY_ENABLED
+          ? "Disabled in this environment"
+          : MOBILE_MONEY_STUB_ENABLED && PRIMARY_MOBILE_MONEY_METHOD === "airtel"
+            ? "Primary checkout path in stub/test mode"
+            : MOBILE_MONEY_STUB_ENABLED
+              ? "Alternative mobile money option in stub/test mode"
+              : "Collected through Flutterwave",
+      disabled: !MOBILE_MONEY_ENABLED,
+    };
+  }
+
+  if (method === "bank") {
+    return {
+      value: "bank",
+      badge: "Bank",
+      badgeClassName: "bg-slate-700 text-white",
+      label: "Bank Transfer",
+      description: BANK_TRANSFER_ENABLED ? "Manual reconciliation required" : "Disabled in this environment",
+      disabled: !BANK_TRANSFER_ENABLED,
+    };
+  }
+
+  return {
+    value: "card",
+    badge: "Card",
+    badgeClassName: "bg-emerald-600 text-white",
+    label: "Card (Stripe Checkout)",
+    description: "Fallback checkout via Stripe",
+    disabled: false,
+  };
+};
+
+const resolveInitialPaymentMethod = (): PaymentMethod => {
+  if (MOBILE_MONEY_ENABLED) {
+    return PRIMARY_MOBILE_MONEY_METHOD;
+  }
+  if (BANK_TRANSFER_ENABLED) {
+    return "bank";
+  }
+  return "card";
+};
 
 const OrderReview = ({ onNavigate }: OrderReviewProps) => {
   const selectedBatch = getBuyerSelectedBatch();
@@ -35,12 +118,18 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(resolveInitialPaymentMethod);
+  const paymentOptions: PaymentOption[] = [
+    getPaymentOptionConfig(PRIMARY_MOBILE_MONEY_METHOD),
+    getPaymentOptionConfig(SECONDARY_MOBILE_MONEY_METHOD),
+    getPaymentOptionConfig("card"),
+    getPaymentOptionConfig("bank"),
+  ];
 
   if (!selectedBatch) {
     return (
-      <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-        <header className="flex items-center justify-between">
+      <section className="app-screen app-screen-comfort flex flex-col gap-6">
+        <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -71,8 +160,8 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
   }
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -98,7 +187,7 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
         </div>
       )}
 
-      <div className="flex items-center gap-4 rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
+      <div className="flex flex-col gap-4 rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center">
         <img
           src={resolveImageUrl(selectedBatch.image)}
           alt={selectedBatch.title}
@@ -180,143 +269,42 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
         <p className="m-0 text-xs font-semibold tracking-[2px] text-[var(--muted)]">Payment Method</p>
       </div>
       <div className="flex flex-col gap-3">
-        <button
-          type="button"
-          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
-            paymentMethod === "card"
-              ? "border border-[var(--accent)] bg-[var(--surface)]"
-              : "border border-[var(--stroke)] bg-[var(--surface)]"
-          }`}
-          onClick={() => setPaymentMethod("card")}
-        >
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-emerald-600 text-white font-semibold text-[11px]">
-              Card
-            </span>
-            <div>
-              <p className="m-0 text-sm font-semibold">Card (Stripe Checkout)</p>
-              <p className="m-0 text-xs text-[var(--muted)]">Live processing supported</p>
-            </div>
-          </div>
-          <span
-            className={`grid h-5 w-5 place-items-center rounded-full ${
-              paymentMethod === "card"
-                ? "bg-[var(--accent)] text-[#0b1307]"
-                : "border border-[var(--stroke)]"
-            }`}
+        {paymentOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
+              paymentMethod === option.value
+                ? "border border-[var(--accent)] bg-[var(--surface)]"
+                : "border border-[var(--stroke)] bg-[var(--surface)]"
+            } ${option.disabled ? "cursor-not-allowed opacity-60" : ""}`}
+            onClick={() => !option.disabled && setPaymentMethod(option.value)}
+            disabled={option.disabled}
           >
-            {paymentMethod === "card" && (
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 12l4 4 10-10" />
-              </svg>
-            )}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
-            paymentMethod === "momo"
-              ? "border border-[var(--accent)] bg-[var(--surface)]"
-              : "border border-[var(--stroke)] bg-[var(--surface)]"
-          } ${!MOBILE_MONEY_STUB_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
-          onClick={() => MOBILE_MONEY_STUB_ENABLED && setPaymentMethod("momo")}
-          disabled={!MOBILE_MONEY_STUB_ENABLED}
-        >
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-yellow-400 text-black font-semibold text-xs">
-              MoMo
-            </span>
-            <div>
-              <p className="m-0 text-sm font-semibold">MTN Mobile Money</p>
-              <p className="m-0 text-xs text-[var(--muted)]">
-                {MOBILE_MONEY_STUB_ENABLED ? "Stub mode for local testing" : "Disabled until provider integration is live"}
-              </p>
+            <div className="flex items-center gap-3">
+              <span className={`grid h-10 w-10 place-items-center rounded-[12px] font-semibold text-xs ${option.badgeClassName}`}>
+                {option.badge}
+              </span>
+              <div>
+                <p className="m-0 text-sm font-semibold">{option.label}</p>
+                <p className="m-0 text-xs text-[var(--muted)]">{option.description}</p>
+              </div>
             </div>
-          </div>
-          <span
-            className={`grid h-5 w-5 place-items-center rounded-full ${
-              paymentMethod === "momo"
-                ? "bg-[var(--accent)] text-[#0b1307]"
-                : "border border-[var(--stroke)]"
-            }`}
-          >
-            {paymentMethod === "momo" && (
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 12l4 4 10-10" />
-              </svg>
-            )}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
-            paymentMethod === "airtel"
-              ? "border border-[var(--accent)] bg-[var(--surface)]"
-              : "border border-[var(--stroke)] bg-[var(--surface)]"
-          } ${!MOBILE_MONEY_STUB_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
-          onClick={() => MOBILE_MONEY_STUB_ENABLED && setPaymentMethod("airtel")}
-          disabled={!MOBILE_MONEY_STUB_ENABLED}
-        >
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-red-500 text-white font-semibold text-xs">
-              Airtel
+            <span
+              className={`grid h-5 w-5 place-items-center rounded-full ${
+                paymentMethod === option.value
+                  ? "bg-[var(--accent)] text-[#0b1307]"
+                  : "border border-[var(--stroke)]"
+              }`}
+            >
+              {paymentMethod === option.value && (
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M5 12l4 4 10-10" />
+                </svg>
+              )}
             </span>
-            <div>
-              <p className="m-0 text-sm font-semibold">Airtel Money</p>
-              <p className="m-0 text-xs text-[var(--muted)]">
-                {MOBILE_MONEY_STUB_ENABLED ? "Stub mode for local testing" : "Disabled until provider integration is live"}
-              </p>
-            </div>
-          </div>
-          <span
-            className={`grid h-5 w-5 place-items-center rounded-full ${
-              paymentMethod === "airtel"
-                ? "bg-[var(--accent)] text-[#0b1307]"
-                : "border border-[var(--stroke)]"
-            }`}
-          >
-            {paymentMethod === "airtel" && (
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 12l4 4 10-10" />
-              </svg>
-            )}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`flex items-center justify-between rounded-[18px] px-4 py-3 ${
-            paymentMethod === "bank"
-              ? "border border-[var(--accent)] bg-[var(--surface)]"
-              : "border border-[var(--stroke)] bg-[var(--surface)]"
-          } ${!BANK_TRANSFER_ENABLED ? "cursor-not-allowed opacity-60" : ""}`}
-          onClick={() => BANK_TRANSFER_ENABLED && setPaymentMethod("bank")}
-          disabled={!BANK_TRANSFER_ENABLED}
-        >
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-slate-700 text-white font-semibold text-xs">
-              Bank
-            </span>
-            <div>
-              <p className="m-0 text-sm font-semibold">Bank Transfer</p>
-              <p className="m-0 text-xs text-[var(--muted)]">
-                {BANK_TRANSFER_ENABLED ? "Manual reconciliation required" : "Disabled in this environment"}
-              </p>
-            </div>
-          </div>
-          <span
-            className={`grid h-5 w-5 place-items-center rounded-full ${
-              paymentMethod === "bank"
-                ? "bg-[var(--accent)] text-[#0b1307]"
-                : "border border-[var(--stroke)]"
-            }`}
-          >
-            {paymentMethod === "bank" && (
-              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 12l4 4 10-10" />
-              </svg>
-            )}
-          </span>
-        </button>
+          </button>
+        ))}
       </div>
 
       <div className="mt-2 flex items-center justify-center gap-4 text-[10px] text-[var(--muted)]">

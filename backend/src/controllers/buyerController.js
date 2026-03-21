@@ -3,11 +3,17 @@ const BuyerOrder = require("../models/BuyerOrder");
 const { User } = require("../models/User");
 const {
   createBuyerOrderCheckoutSession,
-  createEscrowReleaseTransfer,
   getStripeClient,
   isStripeEnabled,
 } = require("../services/stripeService");
 const { createMobileMoneyPaymentSessionStub } = require("../services/mobileMoneyService");
+const {
+  createFlutterwaveRwandaMobileMoneyCharge,
+  isFlutterwaveEnabled,
+  isFlutterwaveMobileMoneyMethod,
+} = require("../services/flutterwaveService");
+const { syncBuyerOrderWithFlutterwaveTransaction } = require("../services/flutterwaveOrderService");
+const { releaseEscrowPayoutForOrder } = require("../services/adminPayoutService");
 const { success, failure } = require("../utils/response");
 
 const _normalizeCropKey = (name) => {
@@ -96,8 +102,10 @@ const _mobileMoneyCollectionMode = () => {
   return mode === "stub_pending" ? "stub_pending" : "stub_auto_confirm";
 };
 
+// Keep mobile money available in stub mode by default so Rwanda-first demos
+// can use MTN/Airtel checkout without live provider credentials.
 const _isMobileMoneyStubEnabled = () =>
-  String(process.env.ALLOW_MOBILE_MONEY_STUB || "false").trim().toLowerCase() === "true";
+  String(process.env.ALLOW_MOBILE_MONEY_STUB || "true").trim().toLowerCase() === "true";
 
 const _extractStripePaymentIntentId = (session) => {
   const paymentIntent = session?.payment_intent;
@@ -193,6 +201,7 @@ const _syncOrderWithStripeCheckout = async (order) => {
 
     if (hasChanges) {
       await order.save();
+      await _markBatchSoldIfFunded(order);
     }
   } catch (error) {
     console.error("Stripe checkout sync error:", {
@@ -203,6 +212,39 @@ const _syncOrderWithStripeCheckout = async (order) => {
   }
 
   return order;
+};
+
+const _syncOrderWithFlutterwaveCheckout = async (order) => {
+  if (!order || !isFlutterwaveEnabled()) return order;
+  if (!isFlutterwaveMobileMoneyMethod(order.paymentMethod)) return order;
+  if (String(order.escrowStatus || "").toLowerCase() === "released") return order;
+
+  const transactionId = String(order.mobileMoneyExternalId || "").trim();
+  if (!transactionId) return order;
+
+  try {
+    await syncBuyerOrderWithFlutterwaveTransaction({
+      order,
+      transactionId,
+      receivedAt: new Date(),
+    });
+  } catch (error) {
+    console.error("Flutterwave mobile money sync error:", {
+      orderId: String(order._id),
+      mobileMoneyExternalId: transactionId,
+      message: error.message,
+    });
+  }
+
+  return order;
+};
+
+const _syncOrderWithPaymentProvider = async (order) => {
+  if (!order) return order;
+  if (isFlutterwaveMobileMoneyMethod(order.paymentMethod)) {
+    return _syncOrderWithFlutterwaveCheckout(order);
+  }
+  return _syncOrderWithStripeCheckout(order);
 };
 
 const _generateOrderNumber = async () => {
@@ -218,6 +260,22 @@ const _generateOrderNumber = async () => {
   return `AG-${Date.now().toString().slice(-6)}`;
 };
 
+const _markBatchSoldIfFunded = async (orderLike) => {
+  const batchId = orderLike?.batch?._id || orderLike?.batch;
+  if (!batchId) return;
+
+  const paymentStatus = String(orderLike?.paymentStatus || "").toLowerCase();
+  const escrowStatus = String(orderLike?.escrowStatus || "").toLowerCase();
+  if (paymentStatus !== "deposit_paid" || escrowStatus !== "funded") return;
+
+  await Batch.findByIdAndUpdate(batchId, {
+    $set: {
+      status: "sold",
+      soldAt: new Date(),
+    },
+  });
+};
+
 const _buildOrderSummaryFromDoc = (order) => ({
   id: String(order._id),
   orderNumber: order.orderNumber,
@@ -227,8 +285,8 @@ const _buildOrderSummaryFromDoc = (order) => ({
   farmerName: order.farmerName || "Farmer",
   destination: order.destination || "Kigali Central Aggregator",
   status: order.status || "active",
-  paymentStatus: order.paymentStatus || "deposit_paid",
-  trackingStage: order.trackingStage || "hub_inspection",
+  paymentStatus: order.paymentStatus || "pending",
+  trackingStage: order.trackingStage || "awaiting_payment",
   image: order.image || null,
   totalWeight: Number(order.totalWeight) || 0,
   totalPrice: Number(order.totalPrice) || 0,
@@ -246,6 +304,14 @@ const _buildOrderSummaryFromDoc = (order) => ({
   stripePaymentIntentId: order.stripePaymentIntentId || null,
   stripeTransferId: order.stripeTransferId || null,
   stripePaymentStatus: order.stripePaymentStatus || null,
+  mobileMoneyProvider: order.mobileMoneyProvider || null,
+  mobileMoneyProviderCode: order.mobileMoneyProviderCode || null,
+  mobileMoneyReference: order.mobileMoneyReference || null,
+  mobileMoneyExternalId: order.mobileMoneyExternalId || null,
+  mobileMoneyTransactionId: order.mobileMoneyTransactionId || null,
+  mobileMoneyStatus: order.mobileMoneyStatus || null,
+  mobileMoneyPayerMsisdn: order.mobileMoneyPayerMsisdn || null,
+  mobileMoneyLastWebhookAt: order.mobileMoneyLastWebhookAt ? new Date(order.mobileMoneyLastWebhookAt).toISOString() : null,
   estimatedArrivalAt: order.estimatedArrivalAt ? new Date(order.estimatedArrivalAt).toISOString() : null,
   trackingUpdatedAt: order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toISOString() : null,
   paymentConfirmedAt: order.paymentConfirmedAt ? new Date(order.paymentConfirmedAt).toISOString() : null,
@@ -312,6 +378,36 @@ const _buildTrackingTimeline = (order) => {
           : "pending",
     updatedAt: trackingUpdatedAt.toISOString(),
   }));
+};
+
+const _advanceTrackingStage = (order) => {
+  const currentStage = String(order.trackingStage || "").toLowerCase();
+  const now = new Date();
+
+  if (String(order.paymentStatus || "").toLowerCase() !== "deposit_paid" || String(order.escrowStatus || "").toLowerCase() !== "funded") {
+    const error = new Error("Escrow must be funded before delivery tracking can continue");
+    error.code = "ESCROW_NOT_READY";
+    throw error;
+  }
+
+  if (String(order.status || "").toLowerCase() === "completed") {
+    return false;
+  }
+
+  if (currentStage === "awaiting_payment") {
+    order.trackingStage = "payment_confirmed";
+  } else if (currentStage === "payment_confirmed") {
+    order.trackingStage = "farmer_dispatching";
+  } else if (currentStage === "farmer_dispatching") {
+    order.trackingStage = "hub_inspection";
+  } else if (currentStage === "hub_inspection") {
+    order.trackingStage = "released_for_delivery";
+  } else {
+    return false;
+  }
+
+  order.trackingUpdatedAt = now;
+  return true;
 };
 
 const getMarketplace = async (req, res) => {
@@ -443,6 +539,21 @@ const createOrder = async (req, res) => {
       return res.status(400).json(failure("INVALID_BATCH_STATUS", "Only active farmer batches can be ordered"));
     }
 
+    const existingOrder = await BuyerOrder.findOne({
+      batch: batchId,
+      status: { $ne: "cancelled" },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+    if (existingOrder) {
+      return res.status(409).json(
+        failure(
+          "BATCH_ALREADY_ORDERED",
+          `This batch already has order ${existingOrder.orderNumber || String(existingOrder._id)} in progress. Open the existing order instead of creating another one.`,
+        ),
+      );
+    }
+
     const products = (batch.products || [])
       .map((entry) => ({
         quantity: Number(entry?.quantity) || 0,
@@ -509,24 +620,99 @@ const createCheckoutSession = async (req, res) => {
       return res.status(404).json(failure("NOT_FOUND", "Order not found"));
     }
 
-    await _syncOrderWithStripeCheckout(order);
+    await _syncOrderWithPaymentProvider(order);
 
     if (String(order.paymentStatus) === "deposit_paid" || String(order.escrowStatus) === "funded") {
       return res.status(400).json(failure("ORDER_ALREADY_PAID", "This order deposit has already been paid"));
     }
 
-    const buyer = await User.findById(buyerId).select("fullName email").lean();
+    const buyer = await User.findById(buyerId).select("fullName email phoneNumber").lean();
     if (!buyer) {
       return res.status(404).json(failure("NOT_FOUND", "Buyer not found"));
     }
 
     const paymentMethod = String(order.paymentMethod || "card").toLowerCase();
     if (paymentMethod === "momo" || paymentMethod === "airtel") {
+      if (isFlutterwaveEnabled()) {
+        const now = new Date();
+        const flutterwaveCharge = await createFlutterwaveRwandaMobileMoneyCharge({
+          order: order.toObject(),
+          buyer,
+          method: paymentMethod,
+        });
+
+        order.mobileMoneyProvider = flutterwaveCharge.providerSlug;
+        order.mobileMoneyProviderCode = flutterwaveCharge.providerCode;
+        order.mobileMoneyReference = flutterwaveCharge.txRef;
+        order.mobileMoneyExternalId = flutterwaveCharge.externalId;
+        order.mobileMoneyTransactionId = flutterwaveCharge.flwRef;
+        order.mobileMoneyStatus = flutterwaveCharge.status;
+        order.mobileMoneyPayerMsisdn = buyer.phoneNumber || order.mobileMoneyPayerMsisdn;
+        order.trackingUpdatedAt = now;
+
+        if (flutterwaveCharge.status === "successful") {
+          order.paymentStatus = "deposit_paid";
+          order.escrowStatus = "funded";
+          order.paymentConfirmedAt = now;
+          order.escrowFundedAt = now;
+          order.trackingStage = "payment_confirmed";
+        } else {
+          order.paymentStatus = "pending";
+          order.escrowStatus = "awaiting_payment";
+          order.trackingStage = "awaiting_payment";
+        }
+        await order.save();
+        await _markBatchSoldIfFunded(order);
+
+        const providerLabel = flutterwaveCharge.providerLabel || _paymentMethodLabel(paymentMethod);
+        const instructions = [
+          `Authorize the ${providerLabel} request on ${buyer.phoneNumber || "the buyer phone number"}.`,
+          "Flutterwave will confirm the transaction before the order is marked as funded.",
+          flutterwaveCharge.redirectUrl
+            ? "You will be redirected back to order tracking after authorization."
+            : "Return to order tracking after authorizing the mobile money prompt.",
+        ];
+
+        return res.status(200).json(
+          success({
+            order: _buildOrderSummaryFromDoc(order.toObject()),
+            timeline: _buildTrackingTimeline(order.toObject()),
+            checkout: {
+              sessionId: flutterwaveCharge.externalId,
+              url: flutterwaveCharge.redirectUrl,
+              expiresAt: null,
+              currency: String(order.currency || "RWF").toUpperCase(),
+              transferGroup: order.stripeTransferGroup || null,
+              kind: "mobile_money",
+              method: paymentMethod,
+              status: flutterwaveCharge.status,
+              requiresAction: Boolean(flutterwaveCharge.redirectUrl),
+              message:
+                flutterwaveCharge.status === "successful"
+                  ? `${providerLabel} payment was confirmed and escrow is now funded.`
+                  : `${providerLabel} request created through Flutterwave. Complete payment authorization on the buyer phone.`,
+              instructions,
+              mobileMoney: {
+                stub: false,
+                provider: flutterwaveCharge.providerSlug,
+                providerCode: flutterwaveCharge.providerCode,
+                providerLabel: flutterwaveCharge.providerLabel,
+                reference: flutterwaveCharge.txRef,
+                amount: Math.round(Number(order.amountDueToday) || 0),
+                currency: String(order.currency || "RWF").toUpperCase(),
+                expiresAt: null,
+                instructions,
+              },
+            },
+          }),
+        );
+      }
+
       if (!_isMobileMoneyStubEnabled()) {
         return res.status(501).json(
           failure(
             "MOBILE_MONEY_NOT_CONFIGURED",
-            "Mobile money collection is not connected yet. Use Card checkout, or set ALLOW_MOBILE_MONEY_STUB=true for local testing.",
+            "Flutterwave mobile money is not configured yet. Set FLUTTERWAVE_SECRET_KEY and FLUTTERWAVE_SECRET_HASH, or enable ALLOW_MOBILE_MONEY_STUB=true for local testing.",
           ),
         );
       }
@@ -535,6 +721,11 @@ const createCheckoutSession = async (req, res) => {
       const collectionMode = _mobileMoneyCollectionMode();
       const now = new Date();
 
+      order.mobileMoneyProvider = mobileMoneySession.mobileMoney?.provider || (paymentMethod === "momo" ? "mtn" : "airtel");
+      order.mobileMoneyProviderCode = mobileMoneySession.mobileMoney?.providerCode || null;
+      order.mobileMoneyReference = mobileMoneySession.mobileMoney?.reference || null;
+      order.mobileMoneyStatus = collectionMode === "stub_auto_confirm" ? "successful" : "pending_provider_integration";
+      order.mobileMoneyPayerMsisdn = buyer.phoneNumber || null;
       order.trackingUpdatedAt = now;
       if (collectionMode === "stub_auto_confirm") {
         order.paymentStatus = "deposit_paid";
@@ -542,12 +733,13 @@ const createCheckoutSession = async (req, res) => {
         order.paymentConfirmedAt = now;
         order.escrowFundedAt = now;
         order.trackingStage = "payment_confirmed";
-        order.stripePaymentStatus = "mobile_money_stub_confirmed";
       } else {
+        order.paymentStatus = "pending";
+        order.escrowStatus = "awaiting_payment";
         order.trackingStage = "awaiting_payment";
-        order.stripePaymentStatus = "mobile_money_stub_pending";
       }
       await order.save();
+      await _markBatchSoldIfFunded(order);
 
       return res.status(200).json(
         success({
@@ -625,11 +817,7 @@ const releaseEscrow = async (req, res) => {
       return res.status(404).json(failure("NOT_FOUND", "Order not found"));
     }
 
-    if (!isStripeEnabled()) {
-      return res.status(503).json(failure("STRIPE_NOT_CONFIGURED", "Stripe is not configured on the backend"));
-    }
-
-    await _syncOrderWithStripeCheckout(order);
+    await _syncOrderWithPaymentProvider(order);
 
     if (String(order.paymentStatus) !== "deposit_paid" || String(order.escrowStatus) !== "funded") {
       if (String(order.escrowStatus) === "released") {
@@ -646,34 +834,36 @@ const releaseEscrow = async (req, res) => {
         .json(failure("ESCROW_NOT_READY", "Escrow funds are not yet available for release"));
     }
 
-    const farmer = await User.findById(order.farmer).select("fullName stripeConnectAccountId").lean();
-    if (!farmer) {
-      return res.status(404).json(failure("NOT_FOUND", "Farmer not found"));
+    if (String(order.trackingStage || "").toLowerCase() !== "released_for_delivery") {
+      return res
+        .status(400)
+        .json(failure("DELIVERY_NOT_READY", "Move the order through delivery stages before confirming receipt"));
     }
 
-    if (!farmer.stripeConnectAccountId) {
-      return res.status(400).json(
+    const payoutResult = await releaseEscrowPayoutForOrder({
+      order: order.toObject(),
+      actorUserId: buyerId,
+    });
+    if (!payoutResult.ok) {
+      return res.status(payoutResult.skipped ? 400 : 500).json(
         failure(
-          "FARMER_PAYOUT_NOT_CONFIGURED",
-          "Farmer payout account is not configured for Stripe Connect. Add stripeConnectAccountId to release escrow.",
+          payoutResult.skipped ? "PAYOUT_MANUAL_REQUIRED" : "ESCROW_RELEASE_FAILED",
+          payoutResult.error || "Failed to release escrow",
         ),
       );
     }
 
-    const transfer = await createEscrowReleaseTransfer({
-      order: order.toObject(),
-      farmerStripeAccountId: farmer.stripeConnectAccountId,
-    });
-
     const now = new Date();
     order.escrowStatus = "released";
-    order.escrowReleasedAt = now;
+    order.escrowReleasedAt = payoutResult.releasedAt || now;
     order.deliveryConfirmedAt = now;
     order.completedAt = now;
     order.status = "completed";
     order.trackingStage = "delivered";
     order.trackingUpdatedAt = now;
-    order.stripeTransferId = transfer.id;
+    if (payoutResult.provider === "stripe" && payoutResult.externalReference) {
+      order.stripeTransferId = payoutResult.externalReference;
+    }
     await order.save();
 
     return res.status(200).json(
@@ -684,6 +874,46 @@ const releaseEscrow = async (req, res) => {
     );
   } catch (error) {
     console.error("Release escrow error:", error);
+    return res.status(500).json(failure("INTERNAL_ERROR", error.message || "Internal server error"));
+  }
+};
+
+const advanceOrderTracking = async (req, res) => {
+  try {
+    const buyerId = req.user.id;
+    const order = await BuyerOrder.findOne({ _id: req.params.id, buyer: buyerId });
+
+    if (!order) {
+      return res.status(404).json(failure("NOT_FOUND", "Order not found"));
+    }
+
+    await _syncOrderWithPaymentProvider(order);
+
+    if (String(order.status || "").toLowerCase() === "completed") {
+      return res.status(200).json(
+        success({
+          order: _buildOrderSummaryFromDoc(order.toObject()),
+          timeline: _buildTrackingTimeline(order.toObject()),
+        }),
+      );
+    }
+
+    const changed = _advanceTrackingStage(order);
+    if (changed) {
+      await order.save();
+    }
+
+    return res.status(200).json(
+      success({
+        order: _buildOrderSummaryFromDoc(order.toObject()),
+        timeline: _buildTrackingTimeline(order.toObject()),
+      }),
+    );
+  } catch (error) {
+    if (error.code === "ESCROW_NOT_READY") {
+      return res.status(400).json(failure("ESCROW_NOT_READY", error.message));
+    }
+    console.error("Advance order tracking error:", error);
     return res.status(500).json(failure("INTERNAL_ERROR", error.message || "Internal server error"));
   }
 };
@@ -751,7 +981,8 @@ const getOrderById = async (req, res) => {
       return res.status(404).json(failure("NOT_FOUND", "Order not found"));
     }
 
-    await _syncOrderWithStripeCheckout(order);
+    await _syncOrderWithPaymentProvider(order);
+    await _markBatchSoldIfFunded(order);
     const orderObject = order.toObject();
 
     return res.status(200).json(
@@ -821,6 +1052,7 @@ const getProfile = async (req, res) => {
 };
 
 module.exports = {
+  advanceOrderTracking,
   createCheckoutSession,
   createOrder,
   getOrderById,

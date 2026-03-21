@@ -4,6 +4,8 @@ process.env.JWT_REFRESH_SECRET = "test_refresh";
 process.env.JWT_ACCESS_EXPIRES_IN = "15m";
 process.env.JWT_REFRESH_EXPIRES_IN = "7d";
 process.env.SAVE_UPLOADS = "false";
+process.env.LLM_API_KEY = "test-key";
+process.env.LLM_MODEL = "test-model";
 
 const request = require("supertest");
 const { app } = require("../src/app");
@@ -119,28 +121,34 @@ describe("Disease API", () => {
   });
 
   test("POST /api/disease/analyze surfaces ML availability errors", async () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     global.fetch = jest.fn().mockRejectedValueOnce(new Error("connect ECONNREFUSED 127.0.0.1:8000"));
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0xff, 0xd9]);
 
-    const res = await request(app)
-      .post("/api/disease/analyze")
-      .field("cropHint", "auto")
-      .field("mode", "camera")
-      .attach("images", fakeJpeg, {
-        filename: "camera-capture.jpg",
-        contentType: "image/jpeg",
-      });
+    try {
+      const res = await request(app)
+        .post("/api/disease/analyze")
+        .field("cropHint", "auto")
+        .field("mode", "camera")
+        .attach("images", fakeJpeg, {
+          filename: "camera-capture.jpg",
+          contentType: "image/jpeg",
+        });
 
-    expect(res.status).toBe(503);
-    expect(res.body).toEqual(
-      expect.objectContaining({
-        success: false,
-        error: expect.objectContaining({
-          code: "ML_SERVICE_UNAVAILABLE",
-          message: expect.stringContaining("Unable to reach ML inference service"),
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual(
+        expect.objectContaining({
+          success: false,
+          error: expect.objectContaining({
+            code: "ML_SERVICE_UNAVAILABLE",
+            message: expect.stringContaining("Unable to reach ML inference service"),
+          }),
         }),
-      }),
-    );
+      );
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test("POST /api/disease/analyze falls back to /generate when /predict is unavailable", async () => {
@@ -203,7 +211,7 @@ describe("Disease API", () => {
     expect(String(global.fetch.mock.calls[1][0])).toContain("/generate");
   });
 
-  test("POST /api/disease/analyze uses /generate directly when DISEASE_ANALYZE_MODEL=paligemma", async () => {
+test("POST /api/disease/analyze uses /generate directly when DISEASE_ANALYZE_MODEL=paligemma", async () => {
     const previous = process.env.DISEASE_ANALYZE_MODEL;
     process.env.DISEASE_ANALYZE_MODEL = "paligemma";
 
@@ -252,5 +260,41 @@ describe("Disease API", () => {
         process.env.DISEASE_ANALYZE_MODEL = previous;
       }
     }
+  });
+
+  test("POST /api/disease/recommendations returns structured guidance", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: [
+                {
+                  text:
+                    "## What this likely is\nBean rust.\n\n## Immediate steps (24-48h)\nScout nearby plants.\n\n## Treatment options\nUse locally approved fungicide.\n\n## Prevention\nImprove spacing.\n\n## When to seek help\nContact an agronomist if spread increases.\n\n## Safety notes\nWear gloves.\nhttps://example.com/bean-rust",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const res = await request(app).post("/api/disease/recommendations").send({
+      cropType: "beans",
+      disease: "bean_rust",
+      confidence: 0.82,
+      location: "Rwamagana, Rwanda",
+      season: "Season B",
+      farmerGoal: "protect yield",
+      severity: "moderate",
+      language: "en",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.recommendationsMarkdown).toContain("## What this likely is");
+    expect(res.body.safetyNotes).toContain("Wear gloves");
+    expect(res.body.citations).toEqual(["https://example.com/bean-rust"]);
   });
 });

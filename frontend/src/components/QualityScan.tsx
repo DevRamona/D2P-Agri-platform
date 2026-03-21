@@ -101,9 +101,9 @@ const QualityScan = ({ onNavigate }: QualityScanProps) => {
   };
 
   return (
-    <section className="w-full max-w-[700px] animate-[rise_0.6s_ease_both] pb-8">
+    <section className="app-screen app-screen-comfort">
       <div className="rounded-[28px] border border-[var(--stroke)] bg-[linear-gradient(180deg,var(--surface),rgba(255,255,255,0.02))] p-5 shadow-[var(--shadow)]">
-        <header className="flex items-start justify-between gap-4">
+        <header className="app-page-header">
           <button
             type="button"
             className="grid h-11 w-11 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"

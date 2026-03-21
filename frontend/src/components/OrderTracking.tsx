@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { getBuyerOrderById, releaseBuyerOrderEscrow, type BuyerOrderDetailResponse } from "../api/buyer";
+import { getBuyerOrderById, releaseBuyerOrderEscrow, type BuyerOrder, type BuyerOrderDetailResponse, type BuyerOrderTimelineStep } from "../api/buyer";
 import { API_BASE } from "../api/client";
 import type { ViewMode } from "../types";
 import { formatOrderReference, getBuyerSelectedOrder, setBuyerSelectedOrder } from "../utils/buyerCheckout";
@@ -19,20 +19,79 @@ const resolveImageUrl = (image: string | null) => {
   return image;
 };
 
+const buildFallbackTimeline = (order: BuyerOrder | null | undefined): BuyerOrderTimelineStep[] => {
+  if (!order) return [];
+
+  const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
+  const trackingUpdatedAt = order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt) : new Date();
+  const isPaymentConfirmed = String(order.paymentStatus || "").toLowerCase() === "deposit_paid";
+  const steps = [
+    {
+      key: "payment_confirmed",
+      title: "Payment Confirmed",
+      detail: isPaymentConfirmed
+        ? `Deposit secured in escrow via ${String(order.paymentMethod || "card").toUpperCase()}`
+        : "Awaiting buyer payment confirmation",
+      time: isPaymentConfirmed ? createdAt.toLocaleString() : "Pending payment",
+    },
+    {
+      key: "farmer_dispatching",
+      title: "Farmer Delivering to Hub",
+      detail: `Farmer: ${order.farmerName || "Farmer"}`,
+      time: new Date(createdAt.getTime() + 2 * 60 * 60 * 1000).toLocaleString(),
+    },
+    {
+      key: "hub_inspection",
+      title: "Hub Inspection Underway",
+      detail: "Quality and weight verification at the aggregation hub",
+      time: "In Progress - Processing",
+    },
+    {
+      key: "released_for_delivery",
+      title: "Released for Delivery",
+      detail: "Pending quality certificate issuance",
+      time: order.escrowReleasedAt ? new Date(order.escrowReleasedAt).toLocaleString() : "Pending dispatch release",
+    },
+    {
+      key: "delivered",
+      title: "Delivered",
+      detail: "Delivery confirmed by buyer",
+      time: order.deliveryConfirmedAt ? new Date(order.deliveryConfirmedAt).toLocaleString() : "Pending buyer confirmation",
+    },
+  ];
+
+  const stageOrder = steps.map((step) => step.key);
+  const currentIndex = isPaymentConfirmed ? Math.max(0, stageOrder.indexOf(order.trackingStage || "payment_confirmed")) : -1;
+
+  return steps.map((step, index) => ({
+    ...step,
+    status: !isPaymentConfirmed
+      ? "pending"
+      : index < currentIndex
+        ? "done"
+        : index === currentIndex
+          ? (order.status === "cancelled" ? "pending" : "active")
+          : "pending",
+    updatedAt: trackingUpdatedAt.toISOString(),
+  }));
+};
+
 const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const orderIdFromQuery = searchParams.get("orderId");
   const checkoutState = searchParams.get("checkout");
+  const paymentStateFromQuery = searchParams.get("status");
   const selectedOrder = getBuyerSelectedOrder();
   const [data, setData] = useState<BuyerOrderDetailResponse | null>(null);
   const [loading, setLoading] = useState(!!(selectedOrder?.id || orderIdFromQuery));
   const [error, setError] = useState<string | null>(null);
   const [releasing, setReleasing] = useState(false);
+  const [pollingPayment, setPollingPayment] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const targetOrderId = selectedOrder?.id || orderIdFromQuery;
+    const targetOrderId = orderIdFromQuery || selectedOrder?.id;
 
     if (!targetOrderId) {
       setLoading(false);
@@ -68,14 +127,81 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
   }, [orderIdFromQuery, selectedOrder?.id]);
 
   const order = data?.order || selectedOrder;
-  const timeline = data?.timeline || [];
+  const timeline = data?.timeline?.length ? data.timeline : buildFallbackTimeline(order);
   const orderRef = order ? (order.orderNumber || formatOrderReference(order.id)) : "AG-ORDER";
-  const canReleaseEscrow = !!order?.id && order.paymentStatus === "deposit_paid" && order.escrowStatus === "funded";
+  const canReleaseEscrow =
+    !!order?.id &&
+    order.paymentStatus === "deposit_paid" &&
+    order.escrowStatus === "funded" &&
+    order.trackingStage === "released_for_delivery";
+  const mobileMoneyLabel =
+    order?.paymentMethod === "airtel" || order?.mobileMoneyProvider === "airtel"
+      ? "Airtel Money"
+      : "MTN Mobile Money";
+  const primaryActionLabel =
+    order?.escrowStatus === "released"
+      ? "Order Completed"
+      : releasing
+        ? "Confirming Delivery..."
+        : canReleaseEscrow
+          ? "Confirm Delivery & Release"
+          : "Awaiting Farmer / Admin Delivery Steps";
+
+  useEffect(() => {
+    const targetOrderId = orderIdFromQuery || order?.id || selectedOrder?.id;
+    const shouldPoll =
+      Boolean(targetOrderId) &&
+      (checkoutState === "mobile_money" || order?.paymentMethod === "momo" || order?.paymentMethod === "airtel") &&
+      order?.paymentStatus !== "deposit_paid" &&
+      order?.escrowStatus !== "funded";
+
+    if (!shouldPoll) {
+      setPollingPayment(false);
+      return () => undefined;
+    }
+
+    let cancelled = false;
+    setPollingPayment(true);
+
+    const interval = window.setInterval(async () => {
+      try {
+        const result = await getBuyerOrderById(String(targetOrderId));
+        if (cancelled) return;
+        setData(result);
+        setBuyerSelectedOrder(result.order);
+        if (result.order.paymentStatus === "deposit_paid" || result.order.escrowStatus === "funded") {
+          setPollingPayment(false);
+          window.clearInterval(interval);
+        }
+      } catch (err) {
+        console.error("Failed to poll mobile money payment status", err);
+      }
+    }, 5000);
+
+    const timeout = window.setTimeout(() => {
+      window.clearInterval(interval);
+      if (!cancelled) setPollingPayment(false);
+    }, 120000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [
+    checkoutState,
+    order?.escrowStatus,
+    order?.id,
+    order?.paymentMethod,
+    order?.paymentStatus,
+    orderIdFromQuery,
+    selectedOrder?.id,
+  ]);
 
   if (!order) {
     return (
-      <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-        <header className="flex items-center justify-between">
+      <section className="app-screen app-screen-comfort flex flex-col gap-6">
+        <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -86,7 +212,7 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <div className="text-center">
+          <div className="min-w-0 text-center">
             <p className="m-0 text-base font-semibold">Order Tracking</p>
             <p className="m-0 text-[11px] font-semibold uppercase tracking-[2px] text-[var(--accent)]">No Active Order</p>
           </div>
@@ -100,8 +226,8 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
   }
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-8">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -112,7 +238,7 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div className="text-center">
+        <div className="min-w-0 text-center">
           <p className="m-0 text-base font-semibold">Order #{orderRef}</p>
           <p className="m-0 text-[11px] font-semibold uppercase tracking-[2px] text-[var(--accent)]">Active Tracking</p>
         </div>
@@ -145,12 +271,16 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
       {checkoutState === "mobile_money" && (
         <div className="rounded-[16px] border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-3 text-sm text-[var(--accent)]">
           {order.paymentStatus === "deposit_paid"
-            ? "Mobile Money payment confirmed. Escrow is funded and order processing has started."
-            : "Mobile Money request created. Complete payment on your phone to fund escrow."}
+            ? `${mobileMoneyLabel} payment confirmed. Escrow is funded and order processing has started.`
+            : order.mobileMoneyStatus === "failed" || paymentStateFromQuery === "failed"
+              ? `${mobileMoneyLabel} payment was not completed. Retry checkout or confirm the prompt on the buyer phone.`
+              : pollingPayment
+                ? `${mobileMoneyLabel} request sent through Flutterwave. Checking for payment confirmation automatically.`
+                : `${mobileMoneyLabel} request created through Flutterwave. Complete payment on your phone to fund escrow.`}
         </div>
       )}
 
-      <div className="flex items-center gap-4 rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
+      <div className="flex flex-col gap-4 rounded-[20px] border border-[var(--stroke)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center">
         <img
           src={resolveImageUrl(order.image)}
           alt={order.title}
@@ -311,20 +441,14 @@ const OrderTracking = ({ onNavigate }: OrderTrackingProps) => {
               setData(result);
               setBuyerSelectedOrder(result.order);
             } catch (err) {
-              console.error("Failed to release escrow", err);
-              setError("Could not release escrow. Ensure the farmer has a Stripe Connect account configured.");
+              console.error("Failed to update order tracking", err);
+              setError("Could not confirm delivery and release escrow. Check the payout configuration and try again.");
             } finally {
               setReleasing(false);
             }
           }}
         >
-          {order.escrowStatus === "released"
-            ? "Escrow Released"
-            : releasing
-              ? "Releasing Escrow..."
-              : canReleaseEscrow
-                ? "Confirm Delivery & Release"
-                : "Awaiting Payment / Delivery"}
+          {primaryActionLabel}
         </button>
       </div>
     </section>

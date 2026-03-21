@@ -17,6 +17,7 @@ import BuyerOrderHistory from "./components/BuyerOrderHistory";
 import BuyerProfile from "./components/BuyerProfile";
 import AdminEscrowAudit from "./components/admin/AdminEscrowAudit";
 import AdminHubDisputes from "./components/admin/AdminHubDisputes";
+import AdminOrderDetail from "./components/admin/AdminOrderDetail";
 import AdminOverview from "./components/admin/AdminOverview";
 import Welcome from "./components/Welcome";
 import type { ThemeMode, UserRole } from "./types";
@@ -84,16 +85,16 @@ const App = () => {
 
   const handleLogout = async () => {
     const refreshToken = getRefreshToken();
+    clearTokens();
+    clearStoredUser();
+    navigate("/");
     if (refreshToken) {
       try {
         await logout(refreshToken);
       } catch (error) {
-        // ignore logout errors
+        // ignore logout errors after local session is cleared
       }
     }
-    clearTokens();
-    clearStoredUser();
-    navigate("/");
   };
 
   const handleLoginSuccess = (nextRole: UserRole, user?: unknown) => {
@@ -125,27 +126,29 @@ const App = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${isAdminRoute ? "px-4 py-4 sm:px-6 sm:py-6 gap-4" : "px-6 py-6 sm:px-10 sm:py-8 lg:px-12 lg:py-10 gap-6 sm:gap-8"}`}>
+    <div className={`min-h-screen flex flex-col ${isAdminRoute ? "px-4 py-4 gap-4 sm:px-6 sm:py-6" : "px-4 py-4 gap-6 sm:px-6 sm:py-6 lg:px-8 lg:py-8"}`}>
       {!isAdminRoute && (
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="font-display text-[clamp(20px,2.4vw,28px)] font-bold tracking-[0.3px]">
-              IsokoLink
-            </span>
-            <span className="text-sm text-[var(--muted)]">Secure trade for Rwanda's farmers and buyers</span>
+        <header className="w-full">
+          <div className="app-frame flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="font-display text-[clamp(20px,2.4vw,28px)] font-bold tracking-[0.3px]">
+                IsokoLink
+              </span>
+              <span className="text-sm text-[var(--muted)]">Secure trade for Rwanda's farmers and buyers</span>
+            </div>
+            <button
+              type="button"
+              className="rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:-translate-y-0.5"
+              onClick={toggleTheme}
+              aria-pressed={theme === "dark"}
+            >
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
           </div>
-          <button
-            type="button"
-            className="rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:-translate-y-0.5"
-            onClick={toggleTheme}
-            aria-pressed={theme === "dark"}
-          >
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </button>
         </header>
       )}
 
-      <main className="flex justify-center">
+      <main className="flex w-full justify-center">
         <Routes>
           <Route
             path="/"
@@ -198,9 +201,10 @@ const App = () => {
 
           {/* Admin Routes */}
           <Route path="/admin" element={currentUserRole === "admin" ? <Navigate to="/admin/overview" replace /> : <Navigate to={adminRouteFallback} replace />} />
-          <Route path="/admin/overview" element={currentUserRole === "admin" ? <AdminOverview onNavigate={navigateAdminView} /> : <Navigate to={adminRouteFallback} replace />} />
-          <Route path="/admin/escrow" element={currentUserRole === "admin" ? <AdminEscrowAudit onNavigate={navigateAdminView} /> : <Navigate to={adminRouteFallback} replace />} />
-          <Route path="/admin/hubs-disputes" element={currentUserRole === "admin" ? <AdminHubDisputes onNavigate={navigateAdminView} /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/overview" element={currentUserRole === "admin" ? <AdminOverview onNavigate={navigateAdminView} onLogout={handleLogout} /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/escrow" element={currentUserRole === "admin" ? <AdminEscrowAudit onNavigate={navigateAdminView} onLogout={handleLogout} /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/orders/:id" element={currentUserRole === "admin" ? <AdminOrderDetail onNavigate={navigateAdminView} onLogout={handleLogout} /> : <Navigate to={adminRouteFallback} replace />} />
+          <Route path="/admin/hubs-disputes" element={currentUserRole === "admin" ? <AdminHubDisputes onNavigate={navigateAdminView} onLogout={handleLogout} /> : <Navigate to={adminRouteFallback} replace />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

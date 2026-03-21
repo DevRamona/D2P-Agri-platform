@@ -116,9 +116,9 @@ const FarmerMarket = ({ onNavigate }: FarmerMarketProps) => {
     [...matchedRows].sort((a, b) => (b.estimatedMarketValue || 0) - (a.estimatedMarketValue || 0))[0] || null;
 
   return (
-    <section className="w-full max-w-[720px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-10">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <section className="app-screen app-screen-wide flex flex-col gap-6">
+      <header className="app-page-header">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -161,11 +161,6 @@ const FarmerMarket = ({ onNavigate }: FarmerMarketProps) => {
                 ? "Loading market signals..."
                 : `${positiveMoves} rising · ${marketPrices.length - positiveMoves} softening`}
             </p>
-            {!loading && marketData?.seededDefaults && (
-              <p className="mt-2 text-xs text-amber-300">
-                Using seeded DB prices. Update the `MarketPrice` collection with current market data.
-              </p>
-            )}
           </div>
           <div className="rounded-[16px] border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm">
             <p className="m-0 text-xs text-[var(--muted)]">Last Synced</p>
@@ -336,7 +331,7 @@ const FarmerMarket = ({ onNavigate }: FarmerMarketProps) => {
         </div>
       </div>
 
-      <nav className="mt-2 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
+      <nav className="app-bottom-nav mt-2 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Home", active: false, target: "dashboard" as const },
           { label: "Inventory", active: false, target: "inventory" as const },

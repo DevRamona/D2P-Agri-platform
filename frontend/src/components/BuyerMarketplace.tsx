@@ -120,9 +120,9 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
   };
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-10">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="app-page-header">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -139,7 +139,7 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
             <p className="m-0 text-xs text-[var(--accent)]">Buyer Portal · Live farmer batches</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -221,7 +221,7 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
         </span>
       </div>
 
-      <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {loading && (
           <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
             Loading farmer batches...
@@ -298,17 +298,19 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
         ))}
       </div>
 
-      <button
-        type="button"
-        className="fixed bottom-24 right-6 sm:right-10 grid h-12 w-12 place-items-center rounded-full bg-[var(--accent)] text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.4)]"
-        aria-label="Quick filter"
-      >
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <path d="M4 6h16" />
-          <path d="M8 12h8" />
-          <path d="M10 18h4" />
-        </svg>
-      </button>
+      <div className="app-fab-row">
+        <button
+          type="button"
+          className="app-fab grid h-12 w-12 place-items-center rounded-full bg-[var(--accent)] text-[#0b1307]"
+          aria-label="Quick filter"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d="M4 6h16" />
+            <path d="M8 12h8" />
+            <path d="M10 18h4" />
+          </svg>
+        </button>
+      </div>
 
       <p className="m-0 text-center text-xs text-[var(--muted)]">
         Last synced:{" "}
@@ -317,7 +319,7 @@ const BuyerMarketplace = ({ onNavigate }: BuyerMarketplaceProps) => {
           : "--:--"}
       </p>
 
-      <nav className="mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
+      <nav className="app-bottom-nav mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Discover", active: true, target: "buyer-marketplace" as const },
           { label: "Orders", active: false, target: "buyer-order-history" as const },
