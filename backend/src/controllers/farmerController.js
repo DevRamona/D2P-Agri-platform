@@ -1,9 +1,46 @@
 const { success, failure } = require("../utils/response");
 const Product = require("../models/Product");
 const Batch = require("../models/Batch");
+const BuyerOrder = require("../models/BuyerOrder");
+const { User } = require("../models/User");
 const { getMarketPayload } = require("../services/marketPriceService");
-const crypto = require('crypto');
-const fs = require('fs');
+const { generateDiseaseBatch } = require("../services/disease/mlInferenceClient");
+const crypto = require("crypto");
+const fs = require("fs");
+
+const _toIsoString = (value) => (value ? new Date(value).toISOString() : null);
+
+const _toFarmerDashboardOrder = (order) => ({
+    id: String(order._id),
+    orderNumber: order.orderNumber || null,
+    batchId: order.batch ? String(order.batch) : null,
+    title: order.title || "Produce Order",
+    buyerName: order.buyerName || "Buyer",
+    destination: order.destination || "Kigali Central Aggregator",
+    totalWeight: Number(order.totalWeight) || 0,
+    totalPrice: Number(order.totalPrice) || 0,
+    status: order.status || "active",
+    paymentStatus: order.paymentStatus || "pending",
+    escrowStatus: order.escrowStatus || "awaiting_payment",
+    trackingStage: order.trackingStage || "awaiting_payment",
+    trackingUpdatedAt: _toIsoString(order.trackingUpdatedAt),
+    createdAt: _toIsoString(order.createdAt),
+});
+
+const _toFarmerDashboardBatch = (batch) => ({
+    id: String(batch._id),
+    batchId: String(batch._id),
+    status: batch.status || "active",
+    totalWeight: Number(batch.totalWeight) || 0,
+    totalPrice: Number(batch.totalPrice) || 0,
+    destination: batch.destination || "Kigali Central Aggregator",
+    soldAt: _toIsoString(batch.soldAt),
+    createdAt: _toIsoString(batch.createdAt),
+    products: (batch.products || []).map((entry) => ({
+        quantity: Number(entry?.quantity) || 0,
+        product: entry?.product || null,
+    })),
+});
 
 // Helper to generate deterministic mock data based on image content
 const calculateMockQuality = (buffer) => {
@@ -33,23 +70,47 @@ const getDashboard = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch active batches
-        const activeBatches = await Batch.find({ farmer: userId, status: 'active' })
-            .populate('products.product', 'name unit image')
-            .sort({ createdAt: -1 });
+        const [farmer, activeBatches, soldBatches, inProgressOrders, marketPayload] = await Promise.all([
+            User.findById(userId).select("fullName phoneNumber email role createdAt").lean(),
+            Batch.find({ farmer: userId, status: "active" })
+                .populate("products.product", "name unit image")
+                .sort({ createdAt: -1 })
+                .lean(),
+            Batch.find({ farmer: userId, status: "sold" })
+                .populate("products.product", "name unit image")
+                .sort({ soldAt: -1, createdAt: -1 })
+                .lean(),
+            BuyerOrder.find({
+                farmer: userId,
+                status: "active",
+                trackingStage: { $ne: "awaiting_payment" },
+            })
+                .sort({ trackingUpdatedAt: -1, createdAt: -1 })
+                .lean(),
+            getMarketPayload(),
+        ]);
 
-        // Calculate total earnings from sold batches
-        const soldBatches = await Batch.find({ farmer: userId, status: 'sold' });
+        if (!farmer) {
+            return res.status(404).json(failure("NOT_FOUND", "Farmer account not found"));
+        }
+
         const totalEarnings = soldBatches.reduce((sum, batch) => sum + batch.totalPrice, 0);
-
-        // Calculate earnings change (mock logic for now, or compare with last month)
         const earningsChange = "+0% vs last month";
-        const marketPayload = await getMarketPayload();
 
         const dashboardData = {
+            account: {
+                id: String(farmer._id),
+                fullName: farmer.fullName || "Farmer",
+                phoneNumber: farmer.phoneNumber || "",
+                email: farmer.email || "",
+                role: farmer.role || "FARMER",
+                createdAt: _toIsoString(farmer.createdAt),
+            },
             totalEarnings,
             earningsChange,
-            activeBatches,
+            activeBatches: activeBatches.map(_toFarmerDashboardBatch),
+            inProgressOrders: inProgressOrders.map(_toFarmerDashboardOrder),
+            recentlySoldBatches: soldBatches.slice(0, 4).map(_toFarmerDashboardBatch),
             marketPrices: marketPayload.marketPrices.map((item) => ({
                 crop: item.crop,
                 price: item.price,
@@ -220,9 +281,75 @@ const getBatchById = async (req, res) => {
             return res.status(403).json(failure("FORBIDDEN", "You do not have permission to view this batch"));
         }
 
-        return res.status(200).json(success(batch));
+        const latestOrder = await BuyerOrder.findOne({ batch: batch._id, farmer: req.user.id })
+            .sort({ createdAt: -1 })
+            .lean();
+        const batchPayload = batch.toObject();
+
+        if (latestOrder) {
+            batchPayload.deliveryOrder = {
+                id: String(latestOrder._id),
+                orderNumber: latestOrder.orderNumber || null,
+                status: latestOrder.status || "active",
+                paymentStatus: latestOrder.paymentStatus || "pending",
+                escrowStatus: latestOrder.escrowStatus || "awaiting_payment",
+                trackingStage: latestOrder.trackingStage || "awaiting_payment",
+                trackingUpdatedAt: latestOrder.trackingUpdatedAt ? new Date(latestOrder.trackingUpdatedAt).toISOString() : null,
+            };
+        } else {
+            batchPayload.deliveryOrder = null;
+        }
+
+        return res.status(200).json(success(batchPayload));
     } catch (error) {
         console.error("Get batch error:", error);
+        return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
+    }
+};
+
+const advanceBatchDelivery = async (req, res) => {
+    try {
+        const batch = await Batch.findById(req.params.id);
+        if (!batch) {
+            return res.status(404).json(failure("NOT_FOUND", "Batch not found"));
+        }
+
+        if (String(batch.farmer) !== String(req.user.id)) {
+            return res.status(403).json(failure("FORBIDDEN", "You do not have permission to update this batch"));
+        }
+
+        const order = await BuyerOrder.findOne({ batch: batch._id, farmer: req.user.id }).sort({ createdAt: -1 });
+        if (!order) {
+            return res.status(404).json(failure("NOT_FOUND", "No delivery order found for this batch"));
+        }
+
+        if (String(order.paymentStatus || "").toLowerCase() !== "deposit_paid" || String(order.escrowStatus || "").toLowerCase() !== "funded") {
+            return res.status(400).json(failure("ESCROW_NOT_READY", "Buyer payment must be funded before dispatching to hub"));
+        }
+
+        const currentStage = String(order.trackingStage || "").toLowerCase();
+        if (currentStage === "payment_confirmed") {
+            order.trackingStage = "farmer_dispatching";
+            order.trackingUpdatedAt = new Date();
+            await order.save();
+        } else if (currentStage !== "farmer_dispatching" && currentStage !== "hub_inspection" && currentStage !== "released_for_delivery" && currentStage !== "delivered") {
+            return res.status(400).json(failure("INVALID_TRACKING_STAGE", "This order cannot be dispatched yet"));
+        }
+
+        return res.status(200).json(success({
+            batchId: String(batch._id),
+            order: {
+                id: String(order._id),
+                orderNumber: order.orderNumber || null,
+                status: order.status || "active",
+                paymentStatus: order.paymentStatus || "pending",
+                escrowStatus: order.escrowStatus || "awaiting_payment",
+                trackingStage: order.trackingStage || "awaiting_payment",
+                trackingUpdatedAt: order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toISOString() : null,
+            },
+        }));
+    } catch (error) {
+        console.error("Advance batch delivery error:", error);
         return res.status(500).json(failure("INTERNAL_ERROR", "Internal server error"));
     }
 };
@@ -253,32 +380,32 @@ const scanQuality = async (req, res) => {
         // 1. Generate Deterministic Mock Data
         const { moisture, grade, fallbackDisease } = calculateMockQuality(fileBuffer);
 
-        // 2. Prepare to send to ML Service
-        const formData = new FormData();
-        const imageBlob = new Blob([fileBuffer], {
-            type: req.file.mimetype || 'application/octet-stream',
-        });
-        formData.append('file', imageBlob, req.file.originalname || 'scan.jpg');
-
-        // 3. Call ML Service
-        const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+        // 2. Call ML Service (PaLiGemma generator) via shared client
         let mlResult = null;
         let usedFallback = false;
 
         try {
-            const response = await fetch(`${ML_SERVICE_URL}/predict`, {
-                method: 'POST',
-                body: formData
+            const files = [
+                {
+                    buffer: fileBuffer,
+                    mimetype: req.file.mimetype,
+                    originalname: req.file.originalname || "scan.jpg",
+                },
+            ];
+
+            const [generated] = await generateDiseaseBatch({
+                files,
+                cropHint: req.body.cropHint || null,
+                mode: "scanQuality",
             });
 
-            if (response.ok) {
-                mlResult = await response.json();
+            if (generated) {
+                mlResult = generated;
             } else {
-                console.warn("ML Service returned error:", response.status);
                 usedFallback = true;
             }
         } catch (mlError) {
-            console.error("Failed to connect to ML Service:", mlError.message);
+            console.error("Failed to connect to ML Service:", mlError);
             usedFallback = true;
         }
 
@@ -287,9 +414,22 @@ const scanQuality = async (req, res) => {
             mlResult = {
                 label: fallbackDisease,
                 confidence: 0.85 + (Math.random() * 0.1), // Mock confidence
-                recommendation: fallbackDisease === "healthy"
-                    ? "Great news! Your plant looks healthy. Continue with regular care."
-                    : `${fallbackDisease.replace('_', ' ')} detected. Recommendation: Isolate infected plants and monitor moisture levels.`
+                recommendation:
+                    fallbackDisease === "healthy"
+                        ? "Great news! Your plant looks healthy. Continue with regular care."
+                        : `${fallbackDisease.replace("_", " ")} detected. Recommendation: Isolate infected plants and monitor moisture levels.`,
+            };
+        } else {
+            // Normalize PaLiGemma response into the legacy shape expected by the UI
+            mlResult = {
+                label: mlResult.disease || fallbackDisease,
+                confidence: typeof mlResult.confidence === "number" ? mlResult.confidence : 0,
+                recommendation:
+                    mlResult.recommendation ||
+                    (mlResult.diagnosis
+                        ? `${mlResult.diagnosis}. Please follow local agronomist guidance for treatment.`
+                        : "Model generated a diagnosis but no specific recommendation text was provided."),
+                raw: mlResult,
             };
         }
 
@@ -320,5 +460,6 @@ module.exports = {
     addProduct,
     createBatch,
     getBatchById,
+    advanceBatchDelivery,
     scanQuality,
 };

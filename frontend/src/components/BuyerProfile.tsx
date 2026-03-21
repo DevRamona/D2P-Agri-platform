@@ -68,8 +68,8 @@ const BuyerProfile = ({ onNavigate, onLogout }: BuyerProfileProps) => {
   const recentOrders = data?.recentOrders || [];
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-10">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -80,7 +80,7 @@ const BuyerProfile = ({ onNavigate, onLogout }: BuyerProfileProps) => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div className="text-center">
+        <div className="min-w-0 text-center">
           <p className="m-0 text-base font-semibold">Buyer Profile</p>
           <p className="m-0 text-[11px] font-semibold uppercase tracking-[2px] text-[var(--accent)]">Commercial Account</p>
         </div>
@@ -161,9 +161,9 @@ const BuyerProfile = ({ onNavigate, onLogout }: BuyerProfileProps) => {
         </button>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {!loading && recentOrders.length === 0 && (
-          <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+          <div className="rounded-[18px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)] lg:col-span-2">
             No orders yet. Browse the marketplace to place your first order.
           </div>
         )}
@@ -224,7 +224,7 @@ const BuyerProfile = ({ onNavigate, onLogout }: BuyerProfileProps) => {
         </button>
       </div>
 
-      <nav className="mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
+      <nav className="app-bottom-nav mt-4 grid grid-cols-4 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Discover", active: false, target: "buyer-marketplace" as const },
           { label: "Orders", active: false, target: "buyer-order-history" as const },

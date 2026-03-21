@@ -86,8 +86,8 @@ const BuyerOrderHistory = ({ onNavigate }: BuyerOrderHistoryProps) => {
   }, [totals]);
 
   return (
-    <section className="w-full max-w-[520px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-10">
-      <header className="flex items-center justify-between">
+    <section className="app-screen app-screen-comfort flex flex-col gap-6">
+      <header className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
         <button
           type="button"
           className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -98,11 +98,11 @@ const BuyerOrderHistory = ({ onNavigate }: BuyerOrderHistoryProps) => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div>
-          <p className="m-0 text-base font-semibold">Order History</p>
+        <div className="min-w-0">
+          <p className="m-0 truncate text-base font-semibold">Order History</p>
           <p className="m-0 text-xs text-[var(--accent)]">Commercial Buyer Account</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-self-end gap-2">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full border border-[var(--stroke)] bg-[var(--surface-2)]"
@@ -164,7 +164,7 @@ const BuyerOrderHistory = ({ onNavigate }: BuyerOrderHistoryProps) => {
         </div>
       </div>
 
-      <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {loading && (
           <div className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
             Loading orders...
@@ -233,18 +233,20 @@ const BuyerOrderHistory = ({ onNavigate }: BuyerOrderHistoryProps) => {
         })}
       </div>
 
-      <button
-        type="button"
-        className="fixed bottom-24 right-6 sm:right-10 flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-3 text-xs font-semibold text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.4)]"
-      >
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-        Batch Export
-      </button>
+      <div className="app-fab-row">
+        <button
+          type="button"
+          className="app-fab flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-3 text-xs font-semibold text-[#0b1307]"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          Batch Export
+        </button>
+      </div>
 
-      <nav className="mt-4 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
+      <nav className="app-bottom-nav mt-4 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Home", active: false, target: "buyer-marketplace" as const },
           { label: "Browse", active: false, target: "buyer-marketplace" as const },

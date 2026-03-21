@@ -11,7 +11,10 @@ const { app } = require("../src/app");
 const { User } = require("../src/models/User");
 const { RefreshToken } = require("../src/models/RefreshToken");
 
+jest.setTimeout(20_000);
+
 let mongoServer;
+let consoleLogSpy;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -23,9 +26,17 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
+beforeEach(() => {
+  consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+});
+
 afterEach(async () => {
   await User.deleteMany({});
   await RefreshToken.deleteMany({});
+  if (consoleLogSpy) {
+    consoleLogSpy.mockRestore();
+    consoleLogSpy = null;
+  }
 });
 
 test("register creates user", async () => {
@@ -52,7 +63,7 @@ test("login returns tokens", async () => {
   });
 
   const res = await request(app).post("/auth/login").send({
-    phoneNumber: "+250700000002",
+    identifier: "+250700000002",
     password: "password123",
   });
 
@@ -70,7 +81,7 @@ test("me returns current user", async () => {
   });
 
   const login = await request(app).post("/auth/login").send({
-    phoneNumber: "+250700000003",
+    identifier: "+250700000003",
     password: "password123",
   });
 
@@ -80,4 +91,53 @@ test("me returns current user", async () => {
 
   expect(res.status).toBe(200);
   expect(res.body.data.user.phoneNumber).toBe("+250700000003");
+});
+
+test("refresh returns a new access token", async () => {
+  await request(app).post("/auth/register").send({
+    fullName: "Buyer",
+    phoneNumber: "+250700000004",
+    password: "password123",
+    role: "BUYER",
+  });
+
+  const login = await request(app).post("/auth/login").send({
+    identifier: "+250700000004",
+    password: "password123",
+  });
+
+  const res = await request(app).post("/auth/refresh").send({
+    refreshToken: login.body.data.refreshToken,
+  });
+
+  expect(res.status).toBe(200);
+  expect(res.body.data.accessToken).toBeDefined();
+});
+
+test("logout revokes the refresh token", async () => {
+  await request(app).post("/auth/register").send({
+    fullName: "Buyer",
+    phoneNumber: "+250700000005",
+    password: "password123",
+    role: "BUYER",
+  });
+
+  const login = await request(app).post("/auth/login").send({
+    identifier: "+250700000005",
+    password: "password123",
+  });
+
+  const logout = await request(app).post("/auth/logout").send({
+    refreshToken: login.body.data.refreshToken,
+  });
+
+  expect(logout.status).toBe(200);
+  expect(logout.body.success).toBe(true);
+
+  const refresh = await request(app).post("/auth/refresh").send({
+    refreshToken: login.body.data.refreshToken,
+  });
+
+  expect(refresh.status).toBe(401);
+  expect(refresh.body.error.code).toBe("UNAUTHORIZED");
 });

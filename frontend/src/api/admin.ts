@@ -38,6 +38,7 @@ export type AdminEscalation = {
 
 export type AdminOverviewResponse = {
   screen: "nationwide_overview";
+  hasData: boolean;
   header: AdminHeader;
   window: { active: string; options: string[] };
   metrics: AdminMetric[];
@@ -48,6 +49,7 @@ export type AdminOverviewResponse = {
 
 export type EscrowLedgerItem = {
   id: string;
+  orderId: string;
   transactionId: string;
   orderNumber: string | null;
   title: string;
@@ -66,6 +68,7 @@ export type EscrowLedgerItem = {
   status: "escrowed" | "released" | "discrepancy" | "pending" | string;
   paymentStatus: string;
   escrowStatus: string;
+  trackingStage: string;
   discrepancyReason: string | null;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +76,7 @@ export type EscrowLedgerItem = {
 
 export type AdminEscrowAuditResponse = {
   screen: "escrow_audit";
+  hasData: boolean;
   header: AdminHeader;
   summary: {
     totalInEscrow: number;
@@ -108,6 +112,61 @@ export type AdminEscrowAuditResponse = {
   lastSynced: string;
 };
 
+export type AdminOrderDetailResponse = {
+  order: {
+    id: string;
+    orderNumber: string | null;
+    title: string;
+    cropKey: string;
+    cropNames: string[];
+    farmerName: string;
+    buyerName: string;
+    destination: string;
+    status: string;
+    paymentStatus: string;
+    trackingStage: string;
+    image: string | null;
+    totalWeight: number;
+    totalPrice: number;
+    pricePerKg: number;
+    currency: string;
+    depositPercent: number;
+    depositAmount: number;
+    balanceDue: number;
+    serviceFee: number;
+    insuranceFee: number;
+    amountDueToday: number;
+    paymentMethod: string;
+    escrowStatus: string;
+    estimatedArrivalAt: string | null;
+    trackingUpdatedAt: string | null;
+    paymentConfirmedAt: string | null;
+    escrowFundedAt: string | null;
+    escrowReleasedAt: string | null;
+    deliveryConfirmedAt: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  };
+  timeline: Array<{
+    key: string;
+    title: string;
+    detail: string;
+    time: string;
+    status: string;
+    updatedAt: string;
+  }>;
+  hub: {
+    key: string;
+    name: string;
+    id: string;
+    region: string;
+    district: string;
+    x: number;
+    y: number;
+    aliases: string[];
+  };
+};
+
 export type AdminDispute = {
   id: string;
   orderId: string;
@@ -140,6 +199,7 @@ export type AdminHubStat = {
 
 export type AdminHubDisputesResponse = {
   screen: "hub_disputes";
+  hasData: boolean;
   header: AdminHeader;
   summary: {
     avgInspectionMinutes: number;
@@ -178,6 +238,9 @@ export const getAdminEscrowAudit = (params?: {
   status?: string;
 }) => apiFetch<AdminEscrowAuditResponse>(withQuery("/admin/escrow-audit", params || {}));
 
+export const getAdminOrderById = (orderId: string) =>
+  apiFetch<AdminOrderDetailResponse>(`/admin/orders/${orderId}`);
+
 export const getAdminHubDisputes = (params?: {
   q?: string;
   tab?: string;
@@ -209,6 +272,19 @@ export const releaseAdminBatchPayouts = (limit = 10) =>
   }>("/admin/escrow-audit/release-batch-payouts", {
     method: "POST",
     body: JSON.stringify({ limit }),
+  });
+
+export const advanceAdminOrderTracking = (orderId: string) =>
+  apiFetch<{
+    order: {
+      id: string;
+      orderNumber: string | null;
+      trackingStage: string;
+      escrowStatus: string;
+      updatedAt: string;
+    };
+  }>(`/admin/orders/${orderId}/advance-tracking`, {
+    method: "POST",
   });
 
 export const reviewAdminDispute = (disputeId: string, payload: { action: string; comment?: string }) =>

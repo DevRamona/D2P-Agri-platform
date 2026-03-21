@@ -1,4 +1,8 @@
+const http = require("http");
+const https = require("https");
+
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_GENERATE_TIMEOUT_MS = 120_000;
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://127.0.0.1:8000";
 
@@ -72,6 +76,9 @@ const normalizeMlGeneration = (item, index) => ({
   warnings: Array.isArray(item?.warnings) ? item.warnings.filter((w) => typeof w === "string") : [],
 });
 
+const supportsFetchMultipart = () =>
+  typeof fetch === "function" && typeof FormData === "function" && typeof Blob === "function";
+
 const buildInferenceFormData = ({ files, cropHint, mode }) => {
   const formData = new FormData();
 
@@ -90,21 +97,207 @@ const buildInferenceFormData = ({ files, cropHint, mode }) => {
   return formData;
 };
 
-const callMlService = async ({ endpoint, formData, timeoutMs }) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+const sanitizeHeaderToken = (value) =>
+  String(value || "")
+    .replace(/[\r\n"]/g, "_")
+    .trim();
+
+const toBuffer = (value) => {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  return Buffer.from(String(value || ""), "utf8");
+};
+
+const buildInferenceMultipartBody = ({ files, cropHint, mode }) => {
+  const boundary = `----d2p-agri-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const chunks = [];
+  const push = (value) => chunks.push(toBuffer(value));
+
+  const appendTextField = (name, value) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    push(`--${boundary}\r\n`);
+    push(`Content-Disposition: form-data; name="${sanitizeHeaderToken(name)}"\r\n\r\n`);
+    push(`${String(value)}\r\n`);
+  };
+
+  const appendImage = (file, index) => {
+    const fileName = sanitizeHeaderToken(file?.originalname || `image-${index + 1}.jpg`);
+    const mimeType = String(file?.mimetype || "application/octet-stream");
+
+    push(`--${boundary}\r\n`);
+    push(`Content-Disposition: form-data; name="images"; filename="${fileName}"\r\n`);
+    push(`Content-Type: ${mimeType}\r\n\r\n`);
+    push(toBuffer(file?.buffer || ""));
+    push("\r\n");
+  };
+
+  files.forEach(appendImage);
+  appendTextField("cropHint", cropHint);
+  appendTextField("mode", mode);
+  push(`--${boundary}--\r\n`);
+
+  const body = Buffer.concat(chunks);
+  return {
+    body,
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+};
+
+const createRequestPayloadFactory = ({ files, cropHint, mode }) => {
+  if (supportsFetchMultipart()) {
+    return () => ({
+      transport: "fetch",
+      formData: buildInferenceFormData({ files, cropHint, mode }),
+    });
+  }
+
+  const multipart = buildInferenceMultipartBody({ files, cropHint, mode });
+  return () => ({
+    transport: "http",
+    multipart,
+  });
+};
+
+const requestWithNodeHttp = ({ baseUrl, endpoint, multipart, timeoutMs }) =>
+  new Promise((resolve, reject) => {
+    let target;
+    try {
+      target = new URL(`${baseUrl}${endpoint}`);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const transport = target.protocol === "https:" ? https : http;
+    const requestOptions = {
+      method: "POST",
+      hostname: target.hostname,
+      port: target.port || undefined,
+      path: `${target.pathname}${target.search}`,
+      headers: {
+        "Content-Type": multipart.contentType,
+        "Content-Length": multipart.body.length,
+      },
+    };
+
+    const req = transport.request(requestOptions, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(toBuffer(chunk)));
+      res.on("end", () => {
+        const status = Number(res.statusCode || 0);
+        resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          bodyText: Buffer.concat(chunks).toString("utf8"),
+        });
+      });
+    });
+
+    req.on("error", reject);
+    req.setTimeout(timeoutMs, () => {
+      const timeoutError = new Error("Request timed out");
+      timeoutError.code = "ETIMEDOUT";
+      req.destroy(timeoutError);
+    });
+
+    req.write(multipart.body);
+    req.end();
+  });
+
+const readResponseText = async (response) => {
+  if (typeof response?.text === "function") {
+    return response.text();
+  }
+
+  if (typeof response?.bodyText === "string") {
+    return response.bodyText;
+  }
+
+  return "";
+};
+
+const readResponseJson = async (response) => {
+  if (typeof response?.json === "function") {
+    return response.json();
+  }
+
+  const text = await readResponseText(response);
+  return JSON.parse(text);
+};
+
+const extractUpstreamErrorMessage = (bodyText) => {
+  const raw = String(bodyText || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+        return parsed.detail.trim();
+      }
+      if (typeof parsed.message === "string" && parsed.message.trim()) {
+        return parsed.message.trim();
+      }
+      if (
+        parsed.error &&
+        typeof parsed.error === "object" &&
+        typeof parsed.error.message === "string" &&
+        parsed.error.message.trim()
+      ) {
+        return parsed.error.message.trim();
+      }
+    }
+  } catch {
+    // Fall back to plain text handling.
+  }
+
+  return raw.slice(0, 240);
+};
+
+const isTimeoutError = (error) => {
+  const message = String(error?.message || "");
+  return (
+    error?.name === "AbortError" ||
+    error?.code === "ETIMEDOUT" ||
+    error?.code === "ESOCKETTIMEDOUT" ||
+    /timed out/i.test(message)
+  );
+};
+
+const callMlService = async ({ endpoint, payloadFactory, timeoutMs }) => {
   const serviceCandidates = buildServiceCandidates();
 
   try {
     let response = null;
     let lastNetworkError = null;
     for (const baseUrl of serviceCandidates) {
+      const payload = payloadFactory();
       try {
-        response = await fetch(`${baseUrl}${endpoint}`, {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        });
+        if (payload.transport === "fetch") {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            response = await fetch(`${baseUrl}${endpoint}`, {
+              method: "POST",
+              body: payload.formData,
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeout);
+          }
+        } else {
+          response = await requestWithNodeHttp({
+            baseUrl,
+            endpoint,
+            multipart: payload.multipart,
+            timeoutMs,
+          });
+        }
         lastNetworkError = null;
         break;
       } catch (error) {
@@ -113,6 +306,15 @@ const callMlService = async ({ endpoint, formData, timeoutMs }) => {
     }
 
     if (!response) {
+      if (isTimeoutError(lastNetworkError)) {
+        const timeoutError = new Error(
+          "ML inference service timed out. The model may still be loading; retry in 30-60 seconds.",
+        );
+        timeoutError.status = 504;
+        timeoutError.code = "ML_SERVICE_TIMEOUT";
+        throw timeoutError;
+      }
+
       const error = new Error("Unable to reach ML inference service. Ensure ml-service is running.");
       error.status = 503;
       error.code = "ML_SERVICE_UNAVAILABLE";
@@ -124,15 +326,32 @@ const callMlService = async ({ endpoint, formData, timeoutMs }) => {
     }
 
     if (!response.ok) {
-      const text = await response.text();
-      const error = new Error("ML inference request failed");
+      const text = await readResponseText(response);
+      const upstreamMessage = extractUpstreamErrorMessage(text);
+      const error = new Error(
+        upstreamMessage ? `ML inference request failed: ${upstreamMessage}` : "ML inference request failed",
+      );
       error.status = 502;
       error.code = "ML_SERVICE_ERROR";
-      error.details = { endpoint, status: response.status, body: text.slice(0, 500) };
+      error.details = {
+        endpoint,
+        status: response.status,
+        upstreamMessage: upstreamMessage || undefined,
+        body: text.slice(0, 500),
+      };
       throw error;
     }
 
-    const payload = await response.json();
+    let payload;
+    try {
+      payload = await readResponseJson(response);
+    } catch {
+      const error = new Error("ML service returned an unexpected response");
+      error.status = 502;
+      error.code = "ML_SERVICE_SCHEMA_ERROR";
+      throw error;
+    }
+
     if (!Array.isArray(payload)) {
       const error = new Error("ML service returned an unexpected response");
       error.status = 502;
@@ -142,30 +361,34 @@ const callMlService = async ({ endpoint, formData, timeoutMs }) => {
 
     return payload;
   } catch (error) {
-    if (error.name === "AbortError") {
-      const timeoutError = new Error("ML inference service timed out");
+    if (isTimeoutError(error)) {
+      const timeoutError = new Error(
+        "ML inference service timed out. The model may still be loading; retry in 30-60 seconds.",
+      );
       timeoutError.status = 504;
       timeoutError.code = "ML_SERVICE_TIMEOUT";
       throw timeoutError;
     }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 };
 
 const predictDiseaseBatch = async ({ files, cropHint, mode }) => {
-  const formData = buildInferenceFormData({ files, cropHint, mode });
-
   const timeoutMs = Number(process.env.ML_SERVICE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  const payload = await callMlService({ endpoint: "/predict", formData, timeoutMs });
+  const payloadFactory = createRequestPayloadFactory({ files, cropHint, mode });
+  const payload = await callMlService({ endpoint: "/predict", payloadFactory, timeoutMs });
   return payload.map(normalizeMlPrediction);
 };
 
 const generateDiseaseBatch = async ({ files, cropHint, mode }) => {
-  const formData = buildInferenceFormData({ files, cropHint, mode });
-  const timeoutMs = Number(process.env.ML_SERVICE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  const payload = await callMlService({ endpoint: "/generate", formData, timeoutMs });
+  const configuredGenerateTimeout = Number(process.env.ML_SERVICE_GENERATE_TIMEOUT_MS || 0);
+  const baseTimeout = Number(process.env.ML_SERVICE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+  const timeoutMs =
+    Number.isFinite(configuredGenerateTimeout) && configuredGenerateTimeout > 0
+      ? configuredGenerateTimeout
+      : Math.max(baseTimeout, DEFAULT_GENERATE_TIMEOUT_MS);
+  const payloadFactory = createRequestPayloadFactory({ files, cropHint, mode });
+  const payload = await callMlService({ endpoint: "/generate", payloadFactory, timeoutMs });
   return payload.map(normalizeMlGeneration);
 };
 

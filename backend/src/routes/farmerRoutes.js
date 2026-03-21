@@ -1,5 +1,5 @@
 const express = require("express");
-const { getDashboard, getMarket, getWallet, getInventory, addProduct, createBatch, getBatchById, scanQuality } = require("../controllers/farmerController");
+const { getDashboard, getMarket, getWallet, getInventory, addProduct, createBatch, getBatchById, advanceBatchDelivery, scanQuality } = require("../controllers/farmerController");
 const { authGuard } = require("../middleware/authGuard");
 const { roleGuard } = require("../middleware/roleGuard");
 
@@ -18,6 +18,7 @@ router.get("/inventory", getInventory);
 router.post("/inventory", upload.single("image"), addProduct);
 router.post("/batch", createBatch);
 router.get("/batch/:id", getBatchById);
+router.post("/batch/:id/advance-delivery", advanceBatchDelivery);
 router.post("/scan-quality", upload.single("image"), scanQuality);
 
 module.exports = router;

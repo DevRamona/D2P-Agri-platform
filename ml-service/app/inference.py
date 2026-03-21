@@ -79,7 +79,8 @@ class BaseDiseaseModel(ABC):
 class TorchDiseaseModel(BaseDiseaseModel):
     def __init__(self, model_path: str | None = None, labels: list[str] | None = None):
         self.model_path = model_path or os.getenv("MODEL_PATH")
-        self.labels = labels or [label.strip() for label in os.getenv("MODEL_LABELS", "").split(",") if label.strip()]
+        self.labels = labels or [label.strip() for label in os.getenv(
+            "MODEL_LABELS", "").split(",") if label.strip()]
         self.device = os.getenv("MODEL_DEVICE", "cpu")
         self.model_format = (os.getenv("MODEL_FORMAT") or "").strip().lower()
         self._torch = None
@@ -94,8 +95,10 @@ class TorchDiseaseModel(BaseDiseaseModel):
             os.getenv("MODEL_DEFAULT_CONFIDENCE_THRESHOLD"),
             0.65,
         )
-        self._margin_threshold = _coerce_float(os.getenv("MODEL_MARGIN_THRESHOLD"), 0.08)
-        self._uncertain_label = os.getenv("MODEL_UNCERTAIN_LABEL", "uncertain").strip().lower() or "uncertain"
+        self._margin_threshold = _coerce_float(
+            os.getenv("MODEL_MARGIN_THRESHOLD"), 0.08)
+        self._uncertain_label = os.getenv(
+            "MODEL_UNCERTAIN_LABEL", "uncertain").strip().lower() or "uncertain"
 
     def _metadata_label_candidates(self) -> list[str]:
         if not self.model_path:
@@ -126,7 +129,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
             calibration.get("default_confidence_threshold"),
             self._default_confidence_threshold,
         )
-        self._margin_threshold = _coerce_float(calibration.get("margin_threshold"), self._margin_threshold)
+        self._margin_threshold = _coerce_float(
+            calibration.get("margin_threshold"), self._margin_threshold)
 
     def _load_labels_from_sidecar(self) -> None:
         for candidate in self._metadata_label_candidates():
@@ -142,16 +146,21 @@ class TorchDiseaseModel(BaseDiseaseModel):
             if not self.labels:
                 labels = metadata.get("labels")
                 if isinstance(labels, list) and all(isinstance(label, str) for label in labels):
-                    self.labels = [label.strip() for label in labels if str(label).strip()]
+                    self.labels = [label.strip()
+                                   for label in labels if str(label).strip()]
                 else:
                     class_names = metadata.get("class_names")
-                    crop_type = str(metadata.get("crop_type") or "").strip().lower()
+                    crop_type = str(metadata.get("crop_type")
+                                    or "").strip().lower()
                     if isinstance(class_names, list) and crop_type in {"bean", "maize"}:
-                        normalized_class_names = [str(name).strip() for name in class_names if str(name).strip()]
-                        self.labels = [f"{crop_type}:{name}" for name in normalized_class_names]
+                        normalized_class_names = [
+                            str(name).strip() for name in class_names if str(name).strip()]
+                        self.labels = [
+                            f"{crop_type}:{name}" for name in normalized_class_names]
 
             if self.labels and self.model_version == "torch-generic-v1":
-                metadata_version = str(metadata.get("model_version") or "").strip()
+                metadata_version = str(metadata.get(
+                    "model_version") or "").strip()
                 if metadata_version:
                     self.model_version = metadata_version
 
@@ -180,7 +189,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
 
     def _validate_labels(self) -> None:
         if not self.labels:
-            raise RuntimeError("MODEL_LABELS is required (format: crop:disease,crop:disease,...) e.g. maize:healthy,maize:common_rust")
+            raise RuntimeError(
+                "MODEL_LABELS is required (format: crop:disease,crop:disease,...) e.g. maize:healthy,maize:common_rust")
 
         available_crops: set[str] = set()
         for label in self.labels:
@@ -190,8 +200,10 @@ class TorchDiseaseModel(BaseDiseaseModel):
                 )
             crop_name, _ = label.split(":", 1)
             if crop_name not in {"maize", "bean", "beans"}:
-                raise RuntimeError("Only bean/beans and maize crops are supported in MODEL_LABELS")
-            available_crops.add("bean" if crop_name in {"bean", "beans"} else "maize")
+                raise RuntimeError(
+                    "Only bean/beans and maize crops are supported in MODEL_LABELS")
+            available_crops.add("bean" if crop_name in {
+                                "bean", "beans"} else "maize")
 
         self._available_crops = available_crops
 
@@ -217,7 +229,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
         }
 
     def _load_torchscript(self) -> None:
-        self._model = self._torch.jit.load(self.model_path, map_location=self.device)
+        self._model = self._torch.jit.load(
+            self.model_path, map_location=self.device)
         self._model.eval()
         self._model_backend = "torchscript"
 
@@ -234,7 +247,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
             state = state["state_dict"]
 
         if not isinstance(state, dict):
-            raise RuntimeError("Unsupported .pth file format. Expected a PyTorch state_dict.")
+            raise RuntimeError(
+                "Unsupported .pth file format. Expected a PyTorch state_dict.")
 
         # Handle DataParallel checkpoints (module.* keys).
         if any(str(key).startswith("module.") for key in state.keys()):
@@ -252,7 +266,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
 
     def load_model(self) -> None:
         if not self.model_path:
-            raise RuntimeError("MODEL_PATH is required - set it to the path of your trained .pth model file")
+            raise RuntimeError(
+                "MODEL_PATH is required - set it to the path of your trained .pth model file")
         self._load_labels_from_sidecar()
         self._infer_default_labels_if_missing()
         self._validate_labels()
@@ -284,7 +299,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
 
         array = _normalize_array(image)
         chw = np.transpose(array, (2, 0, 1))
-        tensor = self._torch.tensor(chw, dtype=self._torch.float32).unsqueeze(0)
+        tensor = self._torch.tensor(
+            chw, dtype=self._torch.float32).unsqueeze(0)
         return tensor
 
     def predict(
@@ -327,16 +343,21 @@ class TorchDiseaseModel(BaseDiseaseModel):
                 cropped_logits = logits_row[allowed_indices]
                 probabilities = self._torch.softmax(cropped_logits, dim=-1)
                 top_k = min(3, probabilities.shape[0])
-                top_values, local_top_indices = self._torch.topk(probabilities, k=top_k)
-                prediction_indices = [allowed_indices[int(local_idx.item())] for local_idx in local_top_indices]
+                top_values, local_top_indices = self._torch.topk(
+                    probabilities, k=top_k)
+                prediction_indices = [
+                    allowed_indices[int(local_idx.item())] for local_idx in local_top_indices]
             else:
                 probabilities = self._torch.softmax(logits_row, dim=-1)
                 top_k = min(3, probabilities.shape[0])
-                top_values, top_indices = self._torch.topk(probabilities, k=top_k)
-                prediction_indices = [int(index.item()) for index in top_indices]
+                top_values, top_indices = self._torch.topk(
+                    probabilities, k=top_k)
+                prediction_indices = [int(index.item())
+                                      for index in top_indices]
 
         top_predictions = [
-            self._prediction_entry(label_index=index, probability=float(probability.item()))
+            self._prediction_entry(
+                label_index=index, probability=float(probability.item()))
             for index, probability in zip(prediction_indices, top_values)
         ]
 
@@ -360,7 +381,8 @@ class TorchDiseaseModel(BaseDiseaseModel):
         candidate_disease = str(best_prediction["disease"])
         label = str(best_prediction["label"])
         threshold = self._threshold_for_label(label)
-        second_conf = float(top_predictions[1]["confidence"]) if len(top_predictions) > 1 else 0.0
+        second_conf = float(top_predictions[1]["confidence"]) if len(
+            top_predictions) > 1 else 0.0
         margin = confidence - second_conf
 
         reasons = []
@@ -404,7 +426,8 @@ class ImageQualityChecker:
 
     def assess(self, image: Image.Image) -> ImageQualityReport:
         rgb = np.asarray(image.convert("RGB"), dtype=np.float32)
-        gray = (0.299 * rgb[..., 0]) + (0.587 * rgb[..., 1]) + (0.114 * rgb[..., 2])
+        gray = (0.299 * rgb[..., 0]) + \
+            (0.587 * rgb[..., 1]) + (0.114 * rgb[..., 2])
         brightness_mean = float(gray.mean())
 
         gx = np.diff(gray, axis=1)
@@ -413,9 +436,11 @@ class ImageQualityChecker:
 
         warnings: list[str] = []
         if brightness_mean < self.brightness_threshold:
-            warnings.append("Image appears too dark. Retake in better lighting.")
+            warnings.append(
+                "Image appears too dark. Retake in better lighting.")
         if blur_score < self.blur_threshold:
-            warnings.append("Image may be blurry. Hold camera steady and refocus.")
+            warnings.append(
+                "Image may be blurry. Hold camera steady and refocus.")
 
         return ImageQualityReport(warnings=warnings, brightness_mean=brightness_mean, blur_score=blur_score)
 
@@ -434,7 +459,8 @@ class DiseaseInferenceService:
         image = self._open_image(raw_bytes)
         quality = self.quality_checker.assess(image)
         image_tensor = self.model.preprocess(image)
-        prediction = self.model.predict(image_tensor, crop_hint=crop_hint, raw_bytes=raw_bytes)
+        prediction = self.model.predict(
+            image_tensor, crop_hint=crop_hint, raw_bytes=raw_bytes)
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
 
         return {
@@ -458,7 +484,8 @@ class DiseaseInferenceService:
     def predict_many(self, files: Iterable[tuple[str, bytes]], *, crop_hint: str = "auto") -> list[dict[str, Any]]:
         normalized_crop_hint = _normalize_crop_hint(crop_hint)
         return [
-            self.predict_bytes(raw_bytes, filename=filename, crop_hint=normalized_crop_hint)
+            self.predict_bytes(raw_bytes, filename=filename,
+                               crop_hint=normalized_crop_hint)
             for filename, raw_bytes in files
         ]
 
@@ -505,26 +532,33 @@ def _parse_paligemma_response(text: str) -> tuple[str, str, str | None]:
     if not normalized:
         return "unknown", "", None
 
-    disease_match = re.search(r"disease\s*:\s*(.+?)(?=(?:\.\s*advice\s*:)|(?:\sadvice\s*:)|$)", normalized, flags=re.I)
-    advice_match = re.search(r"advice\s*:\s*(.+?)(?=(?:\.\s*source\s*:)|(?:\ssource\s*:)|$)", normalized, flags=re.I)
+    disease_match = re.search(
+        r"disease\s*:\s*(.+?)(?=(?:\.\s*advice\s*:)|(?:\sadvice\s*:)|$)", normalized, flags=re.I)
+    advice_match = re.search(
+        r"advice\s*:\s*(.+?)(?=(?:\.\s*source\s*:)|(?:\ssource\s*:)|$)", normalized, flags=re.I)
     source_match = re.search(r"source\s*:\s*(.+)$", normalized, flags=re.I)
 
-    diagnosis = disease_match.group(1).strip(" .") if disease_match else normalized.split(".")[0].strip(" .")
-    recommendation = advice_match.group(1).strip() if advice_match else normalized
+    diagnosis = disease_match.group(1).strip(
+        " .") if disease_match else normalized.split(".")[0].strip(" .")
+    recommendation = advice_match.group(
+        1).strip() if advice_match else normalized
     source = source_match.group(1).strip() if source_match else None
     return diagnosis or "unknown", recommendation, source
 
 
 class PaliGemmaGenerationModel:
     def __init__(self):
-        self.adapter_dir = os.getenv("PALIGEMMA_ADAPTER_DIR", os.path.join("model", "paligemma-rwanda-lora"))
-        self.base_model = os.getenv("PALIGEMMA_BASE_MODEL", "google/paligemma2-3b-pt-448")
+        self.adapter_dir = os.getenv(
+            "PALIGEMMA_ADAPTER_DIR", os.path.join("model", "paligemma-rwanda-lora"))
+        self.base_model = os.getenv(
+            "PALIGEMMA_BASE_MODEL", "google/paligemma2-3b-pt-448")
         self.base_model_path = os.getenv("PALIGEMMA_BASE_MODEL_PATH")
         self.allow_remote = _env_flag("PALIGEMMA_ALLOW_REMOTE", False)
         self.max_new_tokens = int(os.getenv("PALIGEMMA_MAX_NEW_TOKENS", "180"))
         self.temperature = float(os.getenv("PALIGEMMA_TEMPERATURE", "0.0"))
         self.top_p = float(os.getenv("PALIGEMMA_TOP_P", "0.9"))
-        self.model_version = os.getenv("PALIGEMMA_MODEL_VERSION", "paligemma-rwanda-lora-v1")
+        self.model_version = os.getenv(
+            "PALIGEMMA_MODEL_VERSION", "paligemma-rwanda-lora-v1")
         self.prompt_template = os.getenv(
             "PALIGEMMA_PROMPT_TEMPLATE",
             (
@@ -550,13 +584,22 @@ class PaliGemmaGenerationModel:
         if self._device == "cuda":
             self._dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         else:
-            self._dtype = torch.float32
+            # Use bfloat16 on CPU to halve memory usage (12 GB → 6 GB for 3B params).
+            # bfloat16 is natively supported on x86-64 CPUs via PyTorch 2.0+.
+            self._dtype = torch.bfloat16
 
         model_ref = self.base_model_path or self.base_model
         local_files_only = not self.allow_remote
 
-        processor_ref = self.adapter_dir if os.path.exists(os.path.join(self.adapter_dir, "processor_config.json")) else model_ref
-        self._processor = AutoProcessor.from_pretrained(processor_ref, local_files_only=local_files_only, use_fast=False)
+        processor_ref = self.adapter_dir if os.path.exists(os.path.join(
+            self.adapter_dir, "processor_config.json")) else model_ref
+        # Keep the processor behavior aligned with training/inference notebooks.
+        # Fast image processors can alter tensor layout/shape expectations.
+        self._processor = AutoProcessor.from_pretrained(
+            processor_ref,
+            local_files_only=local_files_only,
+            use_fast=False,
+        )
 
         base_model = PaliGemmaForConditionalGeneration.from_pretrained(
             model_ref,
@@ -564,7 +607,8 @@ class PaliGemmaGenerationModel:
             torch_dtype=self._dtype,
             low_cpu_mem_usage=True,
         )
-        self._model = PeftModel.from_pretrained(base_model, self.adapter_dir, is_trainable=False)
+        self._model = PeftModel.from_pretrained(
+            base_model, self.adapter_dir, is_trainable=False)
         self._model.to(self._device)
         self._model.eval()
 
@@ -573,7 +617,8 @@ class PaliGemmaGenerationModel:
 
     def _build_prompt(self, crop_hint: str) -> str:
         normalized_hint = _normalize_crop_hint(crop_hint)
-        crop_part = "beans" if normalized_hint == "beans" else ("maize" if normalized_hint == "maize" else "crop")
+        crop_part = "beans" if normalized_hint == "beans" else (
+            "maize" if normalized_hint == "maize" else "crop")
         prompt = self.prompt_template.format(crop_part=crop_part)
         if not prompt.startswith("<image>"):
             prompt = f"<image> {prompt}"
@@ -584,23 +629,44 @@ class PaliGemmaGenerationModel:
             raise RuntimeError("PaliGemma model is not initialized")
 
         prompt = self._build_prompt(crop_hint=crop_hint)
+        # Use the default processor image path to keep tensor shapes compatible
+        # with PaLiGemma expectations.
         inputs = self._processor(images=image, text=prompt, return_tensors="pt")
-        inputs = {k: v.to(self._device) if hasattr(v, "to") else v for k, v in inputs.items()}
+
+        # Some processor/runtime combinations can emit NHWC pixel tensors.
+        # PaLiGemma expects NCHW (batch, channels, height, width).
+        pixel_values = inputs.get("pixel_values")
+        if hasattr(pixel_values, "ndim") and pixel_values.ndim == 4:
+            if int(pixel_values.shape[1]) != 3 and int(pixel_values.shape[-1]) == 3:
+                pixel_values = pixel_values.permute(0, 3, 1, 2).contiguous()
+                inputs["pixel_values"] = pixel_values
+
+            if int(inputs["pixel_values"].shape[1]) != 3:
+                raise RuntimeError(
+                    f"Unexpected pixel_values shape for PaLiGemma: {tuple(inputs['pixel_values'].shape)}"
+                )
+
+        inputs = {k: v.to(self._device) if hasattr(v, "to")
+                  else v for k, v in inputs.items()}
 
         with self._torch.no_grad():
-            output_ids = self._model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                do_sample=self.temperature > 0,
-                temperature=max(self.temperature, 1e-5),
-                top_p=self.top_p,
-            )
+            do_sample = self.temperature > 0
+            gen_kwargs = {
+                "max_new_tokens": self.max_new_tokens,
+                "do_sample": do_sample,
+            }
+            if do_sample:
+                gen_kwargs["temperature"] = self.temperature
+                gen_kwargs["top_p"] = self.top_p
+            output_ids = self._model.generate(**inputs, **gen_kwargs)
 
         prompt_len = int(inputs["input_ids"].shape[1])
         generated_ids = output_ids[0][prompt_len:]
-        generated_text = self._processor.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+        generated_text = self._processor.tokenizer.decode(
+            generated_ids, skip_special_tokens=True).strip()
 
-        diagnosis, recommendation, source = _parse_paligemma_response(generated_text)
+        diagnosis, recommendation, source = _parse_paligemma_response(
+            generated_text)
         disease_slug = _normalize_disease_slug(diagnosis)
         crop_type = _infer_crop_from_diagnosis(diagnosis, crop_hint=crop_hint)
         is_uncertain = disease_slug in {"unknown", "uncertain"}
@@ -658,7 +724,8 @@ class PaliGemmaGenerationService:
     def generate_many(self, files: Iterable[tuple[str, bytes]], *, crop_hint: str = "auto") -> list[dict[str, Any]]:
         normalized_crop_hint = _normalize_crop_hint(crop_hint)
         return [
-            self.generate_bytes(raw_bytes, filename=filename, crop_hint=normalized_crop_hint)
+            self.generate_bytes(raw_bytes, filename=filename,
+                                crop_hint=normalized_crop_hint)
             for filename, raw_bytes in files
         ]
 

@@ -5,6 +5,8 @@ const {
   getAdminOverview,
   getAdminEscrowAudit,
   getAdminHubDisputes,
+  advanceAdminOrderTracking,
+  getAdminOrderById,
   releaseAdminBatchPayouts,
   createAdminDispute,
   reviewAdminDispute,
@@ -17,6 +19,8 @@ router.use(roleGuard("ADMIN"));
 
 router.get("/overview", getAdminOverview);
 router.get("/escrow-audit", getAdminEscrowAudit);
+router.get("/orders/:id", getAdminOrderById);
+router.post("/orders/:id/advance-tracking", advanceAdminOrderTracking);
 router.post("/escrow-audit/release-batch-payouts", releaseAdminBatchPayouts);
 router.get("/hubs-disputes", getAdminHubDisputes);
 router.post("/disputes", createAdminDispute);

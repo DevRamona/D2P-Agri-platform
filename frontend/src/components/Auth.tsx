@@ -12,6 +12,7 @@ interface AuthProps {
 }
 
 type AuthTab = "login" | "register";
+type PublicRegistrationRole = "farmer" | "buyer";
 
 type StatusState = {
   loading: boolean;
@@ -23,7 +24,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const tab = initialTab;
-  const [role, setRole] = useState<UserRole>("farmer");
+  const [role, setRole] = useState<PublicRegistrationRole>("farmer");
   const [status, setStatus] = useState<StatusState>({
     loading: false,
     error: null,
@@ -69,7 +70,6 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
         // identifierInput is the phone number here
         const phoneNumber = identifierInput || undefined;
         const email = emailInput || undefined;
-        const adminInviteCode = String(formData.get("adminInviteCode") || "").trim() || undefined;
 
         if (!phoneNumber && !email) {
           setStatus({ loading: false, error: "Please provide either a phone number or an email.", success: null });
@@ -81,7 +81,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
           return;
         }
 
-        await register({ fullName, phoneNumber, email, password, role, adminInviteCode });
+        await register({ fullName, phoneNumber, email, password, role });
         navigate("/auth/login", {
           state: { successMessage: "Account created successfully. Please log in." }
         });
@@ -108,7 +108,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
 
   return (
     <section
-      className="w-full max-w-[520px] lg:max-w-[600px] flex flex-col gap-5 animate-[rise_0.6s_ease_both]"
+      className="app-screen app-screen-auth flex flex-col gap-5"
       aria-labelledby="auth-title"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -165,12 +165,11 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
                   <select
                     name="role"
                     value={role}
-                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    onChange={(e) => setRole(e.target.value as PublicRegistrationRole)}
                     className="w-full appearance-none rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
                   >
                     <option value="farmer">Farmer</option>
                     <option value="buyer">Buyer</option>
-                    <option value="admin">Admin</option>
                   </select>
                   <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[var(--muted)]">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -178,6 +177,9 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
                     </svg>
                   </div>
                 </div>
+                <span className="text-[12px] text-[var(--muted)]">
+                  Administrative accounts are provisioned separately.
+                </span>
               </label>
 
               <label className="flex flex-col gap-2 text-sm font-semibold">
@@ -186,7 +188,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
                   type="text"
                   name="fullName"
                   autoComplete="name"
-                  placeholder="Jane Doe"
+                  placeholder="Enter your full name"
                   required
                   className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] placeholder:text-[rgba(163,177,155,0.7)]"
                 />
@@ -198,24 +200,10 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
                   type="email"
                   name="email"
                   autoComplete="email"
-                  placeholder="jane@example.com"
+                  placeholder="Enter your email"
                   className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] placeholder:text-[rgba(163,177,155,0.7)]"
                 />
               </label>
-
-              {role === "admin" && (
-                <label className="flex flex-col gap-2 text-sm font-semibold">
-                  <span className="text-[13px] text-[var(--muted)]">Admin Invite Code</span>
-                  <input
-                    type="password"
-                    name="adminInviteCode"
-                    autoComplete="off"
-                    placeholder="Enter admin invite code"
-                    required
-                    className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] placeholder:text-[rgba(163,177,155,0.7)]"
-                  />
-                </label>
-              )}
             </>
           )}
 
@@ -225,7 +213,7 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
               type="text"
               name="identifier"
               autoComplete="username"
-              placeholder={tab === "login" ? "jane@example.com or +250..." : "+250 7XX XXX XXX"}
+              placeholder={tab === "login" ? "Enter your email or phone number" : "+250 7XX XXX XXX"}
               className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-3 text-[15px] text-[var(--text)] placeholder:text-[rgba(163,177,155,0.7)]"
             />
           </label>

@@ -10,6 +10,7 @@ scikit-learn
 matplotlib
 pytest
 httpx
+python-dotenv>=1.0.0
 transformers>=5.3.0
 accelerate>=1.1.0
 peft>=0.13.0

@@ -56,9 +56,9 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
   };
 
   return (
-    <section className="relative w-full max-w-[680px] flex flex-col gap-6 animate-[rise_0.6s_ease_both] pb-20">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <section className="app-screen app-screen-comfort relative flex flex-col gap-6">
+      <header className="app-page-header">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             className="h-10 w-10 rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] grid place-items-center"
@@ -75,7 +75,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
             <p className="m-0 text-xs text-[var(--muted)]">Track stored crops and availability</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3">
           <button
             type="button"
             className="relative h-10 w-10 rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] grid place-items-center"
@@ -161,10 +161,10 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
         </button>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {loading && <p className="text-center text-[var(--muted)]">Loading inventory...</p>}
         {!loading && stockItems.length === 0 && (
-          <p className="text-center text-[var(--muted)]">No items in inventory. Add your first crop!</p>
+          <p className="text-center text-[var(--muted)] md:col-span-2">No items in inventory. Add your first crop!</p>
         )}
         {stockItems.map((item) => (
           <div key={item._id} className="rounded-[22px] border border-[var(--stroke)] bg-[var(--surface)] p-4">
@@ -207,14 +207,16 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={() => setIsAddModalOpen(true)}
-        className="fixed bottom-24 right-6 sm:right-10 h-14 w-14 rounded-full bg-[var(--accent)] text-3xl text-[#0b1307] shadow-[0_16px_28px_rgba(73,197,26,0.4)]"
-        aria-label="Add crop"
-      >
-        +
-      </button>
+      <div className="app-fab-row">
+        <button
+          type="button"
+          onClick={() => setIsAddModalOpen(true)}
+          className="app-fab h-14 w-14 rounded-full bg-[var(--accent)] text-3xl text-[#0b1307]"
+          aria-label="Add crop"
+        >
+          +
+        </button>
+      </div>
 
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -288,7 +290,7 @@ const ProduceInventory = ({ onNavigate }: ProduceInventoryProps) => {
         </div>
       )}
 
-      <nav className="mt-4 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
+      <nav className="app-bottom-nav mt-4 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           {
             label: "Home",

@@ -53,6 +53,10 @@
     background: var(--bg-gradient);
   }
 
+  #root {
+    min-height: 100vh;
+  }
+
   img {
     max-width: 100%;
     display: block;
@@ -67,6 +71,69 @@
   input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .app-frame {
+    width: 100%;
+    max-width: 1120px;
+    margin-inline: auto;
+  }
+
+  .app-screen {
+    width: 100%;
+    padding-bottom: clamp(2rem, 5vw, 4rem);
+    animation: rise 0.6s ease both;
+  }
+
+  .app-screen-auth {
+    max-width: 600px;
+  }
+
+  .app-screen-compact {
+    max-width: 760px;
+  }
+
+  .app-screen-comfort {
+    max-width: 940px;
+  }
+
+  .app-screen-wide {
+    max-width: 1080px;
+  }
+
+  .app-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .app-bottom-nav {
+    position: sticky;
+    bottom: 1rem;
+    z-index: 20;
+    backdrop-filter: blur(18px);
+  }
+
+  .app-fab-row {
+    position: sticky;
+    bottom: 1rem;
+    z-index: 30;
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+    pointer-events: none;
+  }
+
+  .app-fab-row > * {
+    pointer-events: auto;
+  }
+
+  .app-fab {
+    box-shadow: 0 16px 28px rgba(73, 197, 26, 0.4);
   }
 }
 
