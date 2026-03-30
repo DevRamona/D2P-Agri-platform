@@ -8,6 +8,7 @@ pillow
 numpy
 scikit-learn
 matplotlib
+seaborn
 pytest
 httpx
 python-dotenv>=1.0.0

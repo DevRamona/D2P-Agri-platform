@@ -1,5 +1,6 @@
 **/node_modules/
 **/dist/
+.venv/
 **/.env
 **/.env.local
 **/.env.*.local
@@ -19,6 +20,7 @@ __pycache__/
 **/.pytest_cache/
 ml-models/
 ml-service/artifacts/
+ml-service/paligemma-jsonl-*/
 
 # User Uploads
 backend/uploads/

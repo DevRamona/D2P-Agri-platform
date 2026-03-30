@@ -6,7 +6,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
 try:
     from dataset import get_dataloaders
@@ -153,8 +153,26 @@ def evaluate_model(
             all_preds.extend(preds.cpu().numpy().tolist())
             all_labels.extend(labels.cpu().numpy().tolist())
 
+    report = classification_report(
+        all_labels,
+        all_preds,
+        target_names=detected_class_names,
+        output_dict=True,
+        zero_division=0,
+    )
+    accuracy = accuracy_score(all_labels, all_preds)
+    macro_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+    weighted_f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+    micro_f1 = f1_score(all_labels, all_preds, average="micro", zero_division=0)
+
+    print("\nEvaluation Summary:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Macro F1 Score: {macro_f1:.4f}")
+    print(f"Weighted F1 Score: {weighted_f1:.4f}")
+    print(f"Micro F1 Score: {micro_f1:.4f}")
+
     print("\nClassification Report:")
-    print(classification_report(all_labels, all_preds, target_names=detected_class_names))
+    print(classification_report(all_labels, all_preds, target_names=detected_class_names, zero_division=0))
 
     sample_metadata = list(getattr(test_loader.dataset, "sample_metadata", []))
     group_accuracy = _compute_group_accuracy(all_preds, all_labels, sample_metadata)
@@ -173,6 +191,20 @@ def evaluate_model(
     plt.title("Confusion Matrix")
     plt.savefig("confusion_matrix.png")
     print("Confusion matrix saved to confusion_matrix.png")
+
+    metrics_payload = {
+        "accuracy": round(float(accuracy), 4),
+        "macro_f1": round(float(macro_f1), 4),
+        "weighted_f1": round(float(weighted_f1), 4),
+        "micro_f1": round(float(micro_f1), 4),
+        "classification_report": report,
+        "class_names": detected_class_names,
+        "group_accuracy": group_accuracy,
+        "confusion_matrix_path": os.path.abspath("confusion_matrix.png"),
+    }
+    with open("evaluation_metrics.json", "w", encoding="utf-8") as handle:
+        json.dump(metrics_payload, handle, indent=2)
+    print("Evaluation metrics saved to evaluation_metrics.json")
 
 
 if __name__ == "__main__":
