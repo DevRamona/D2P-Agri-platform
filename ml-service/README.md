@@ -85,6 +85,17 @@ python model/evaluate.py \
   --manifest_images_root "../ml-models"
 ```
 
+### PaLiGemma JSONL dataset
+
+Use this for Roboflow/PaliGemma exports such as `_annotations.test.jsonl`:
+
+```bash
+python -m model.evaluate_paligemma \
+  --jsonl_path "C:/path/to/palidetect_dataset/dataset/_annotations.test.jsonl" \
+  --jsonl_images_root "C:/path/to/palidetect_dataset/dataset" \
+  --output_dir "evaluation/paligemma"
+```
+
 ## Serving API
 
 ```bash

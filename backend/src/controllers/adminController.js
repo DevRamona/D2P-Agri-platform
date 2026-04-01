@@ -311,7 +311,59 @@ const paymentMethodLabel = (method) => {
   return "Card";
 };
 
+const getAdminEffectiveQuote = (order) => {
+  const totalPrice = n(order.totalPrice);
+  const parsedDepositPercent = Number(order.depositPercent);
+  const depositPercent = Number.isFinite(parsedDepositPercent) ? parsedDepositPercent : 0.6;
+  const insuranceFee = n(order.insuranceFee);
+  const computedDepositAmount = Math.round(totalPrice * depositPercent);
+  const computedBalanceDue = Math.max(0, totalPrice - computedDepositAmount);
+  const computedAmountDueToday = computedDepositAmount + insuranceFee;
+  const paymentStatus = String(order.paymentStatus || "").toLowerCase();
+  const escrowStatus = String(order.escrowStatus || "").toLowerCase();
+  const hasSettledPricing =
+    paymentStatus === "deposit_paid" ||
+    paymentStatus === "refunded" ||
+    escrowStatus === "funded" ||
+    escrowStatus === "released" ||
+    escrowStatus === "refunded" ||
+    escrowStatus === "release_failed" ||
+    Boolean(order.paymentConfirmedAt) ||
+    Boolean(order.escrowFundedAt);
+
+  if (!hasSettledPricing) {
+    return {
+      depositPercent,
+      depositAmount: computedDepositAmount,
+      balanceDue: computedBalanceDue,
+      serviceFee: 0,
+      insuranceFee,
+      amountDueToday: computedAmountDueToday,
+    };
+  }
+
+  return {
+    depositPercent,
+    depositAmount: n(order.depositAmount) || computedDepositAmount,
+    balanceDue: n(order.balanceDue) || computedBalanceDue,
+    serviceFee: n(order.serviceFee),
+    insuranceFee,
+    amountDueToday: n(order.amountDueToday) || computedAmountDueToday,
+  };
+};
+
 const toAdminOrderSummary = (order) => ({
+  ...(() => {
+    const quote = getAdminEffectiveQuote(order);
+    return {
+      depositPercent: quote.depositPercent,
+      depositAmount: quote.depositAmount,
+      balanceDue: quote.balanceDue,
+      serviceFee: quote.serviceFee,
+      insuranceFee: quote.insuranceFee,
+      amountDueToday: quote.amountDueToday,
+    };
+  })(),
   id: String(order._id),
   orderNumber: order.orderNumber || null,
   title: order.title || "Produce Batch",
@@ -328,12 +380,6 @@ const toAdminOrderSummary = (order) => ({
   totalPrice: n(order.totalPrice),
   pricePerKg: n(order.pricePerKg),
   currency: String(order.currency || "RWF").toUpperCase(),
-  depositPercent: typeof order.depositPercent === "number" ? order.depositPercent : 0.6,
-  depositAmount: n(order.depositAmount),
-  balanceDue: n(order.balanceDue),
-  serviceFee: n(order.serviceFee),
-  insuranceFee: n(order.insuranceFee),
-  amountDueToday: n(order.amountDueToday),
   paymentMethod: order.paymentMethod || "card",
   escrowStatus: order.escrowStatus || "awaiting_payment",
   estimatedArrivalAt: d(order.estimatedArrivalAt)?.toISOString() || null,

@@ -250,10 +250,6 @@ const OrderReview = ({ onNavigate }: OrderReviewProps) => {
           <span className="text-[var(--text)]">{formatCurrency(quote.depositAmount)}</span>
         </div>
         <div className="mt-3 flex items-center justify-between text-[var(--muted)]">
-          <span>Service Fee</span>
-          <span className="text-[var(--text)]">{formatCurrency(quote.serviceFee)}</span>
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[var(--muted)]">
           <span>Logistics Insurance</span>
           <span className={quote.insuranceFee > 0 ? "text-[var(--text)]" : "text-[var(--accent)]"}>
             {quote.insuranceFee > 0 ? formatCurrency(quote.insuranceFee) : "Free"}

@@ -20,6 +20,7 @@ import AdminHubDisputes from "./components/admin/AdminHubDisputes";
 import AdminOrderDetail from "./components/admin/AdminOrderDetail";
 import AdminOverview from "./components/admin/AdminOverview";
 import Welcome from "./components/Welcome";
+import LegalHub from "./components/LegalHub";
 import type { ThemeMode, UserRole } from "./types";
 import { logout, fromApiRole, type ApiUser } from "./api/auth";
 import {
@@ -136,14 +137,16 @@ const App = () => {
               </span>
               <span className="text-sm text-[var(--muted)]">Secure trade for Rwanda's farmers and buyers</span>
             </div>
-            <button
-              type="button"
-              className="rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:-translate-y-0.5"
-              onClick={toggleTheme}
-              aria-pressed={theme === "dark"}
-            >
-              {theme === "dark" ? "Light mode" : "Dark mode"}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="rounded-full border border-[var(--stroke)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:-translate-y-0.5"
+                onClick={toggleTheme}
+                aria-pressed={theme === "dark"}
+              >
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
+            </div>
           </div>
         </header>
       )}
@@ -154,6 +157,7 @@ const App = () => {
             path="/"
             element={<Welcome onGetStarted={handleNavigateToAuth} />}
           />
+          <Route path="/legal" element={<LegalHub />} />
           <Route
             path="/auth/login"
             element={

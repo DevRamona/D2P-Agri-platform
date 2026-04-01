@@ -1,5 +1,7 @@
 
 
+import { Link } from "react-router-dom";
+
 interface WelcomeProps {
   onGetStarted: (tab: "login" | "register") => void;
 }
@@ -66,11 +68,19 @@ const Welcome = ({ onGetStarted }: WelcomeProps) => {
             Log in
           </button>
         </p>
+
       </div>
 
       <p className="m-0 text-center text-xs leading-relaxed text-[var(--muted)]">
-        By continuing, you agree to our <span className="font-semibold text-[var(--accent)]">Terms of Service</span> and
-        <span className="font-semibold text-[var(--accent)]"> Privacy Policy</span>.
+        By continuing, you agree to our{" "}
+        <Link to="/legal#eula" className="font-semibold text-[var(--accent)] hover:underline">
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link to="/legal#privacy" className="font-semibold text-[var(--accent)] hover:underline">
+          Privacy Policy
+        </Link>
+        .
       </p>
     </section>
   );

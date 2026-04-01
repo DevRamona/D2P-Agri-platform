@@ -1,5 +1,5 @@
 ﻿import { useState, type FormEvent, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { UserRole } from "../types";
 import { ApiRequestError } from "../api/client";
 import { fromApiRole, login, register } from "../api/auth";
@@ -244,6 +244,17 @@ const Auth = ({ onBack, onLoginSuccess, initialTab = "login" }: AuthProps) => {
 
         <p className="m-0 text-center text-[13px] text-[var(--muted)]">
           Need help? <span className="font-semibold text-[var(--accent)]">Contact support</span>
+        </p>
+        <p className="m-0 text-center text-[13px] text-[var(--muted)]">
+          Review our{" "}
+          <Link to="/legal#eula" className="font-semibold text-[var(--accent)] hover:underline">
+            EULA
+          </Link>{" "}
+          and{" "}
+          <Link to="/legal#privacy" className="font-semibold text-[var(--accent)] hover:underline">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </div>
     </section>

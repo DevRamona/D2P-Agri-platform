@@ -64,17 +64,20 @@ const _deriveQualityTag = (batch) => {
   return "Listed";
 };
 
+const _resolveDepositPercent = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0.6;
+};
+
 const _calculateOrderQuote = (totalPrice, options = {}) => {
   const normalizedTotal = Math.max(0, Number(totalPrice) || 0);
-  const depositPercent = typeof options.depositPercent === "number" ? options.depositPercent : 0.6;
-  const serviceFeeRate = typeof options.serviceFeeRate === "number" ? options.serviceFeeRate : 0.01;
-  const serviceFeeMinimum = typeof options.serviceFeeMinimum === "number" ? options.serviceFeeMinimum : 5000;
+  const depositPercent = _resolveDepositPercent(options.depositPercent);
   const insuranceFee = typeof options.insuranceFee === "number" ? options.insuranceFee : 0;
 
   const depositAmount = Math.round(normalizedTotal * depositPercent);
   const balanceDue = Math.max(0, normalizedTotal - depositAmount);
-  const serviceFee = normalizedTotal > 0 ? Math.max(serviceFeeMinimum, Math.round(normalizedTotal * serviceFeeRate)) : 0;
-  const amountDueToday = depositAmount + serviceFee + insuranceFee;
+  const serviceFee = 0;
+  const amountDueToday = depositAmount + insuranceFee;
 
   return {
     depositPercent,
@@ -84,6 +87,68 @@ const _calculateOrderQuote = (totalPrice, options = {}) => {
     insuranceFee,
     amountDueToday,
   };
+};
+
+const _hasSettledOrderPricing = (order) => {
+  const paymentStatus = String(order?.paymentStatus || "").toLowerCase();
+  const escrowStatus = String(order?.escrowStatus || "").toLowerCase();
+
+  return (
+    paymentStatus === "deposit_paid" ||
+    paymentStatus === "refunded" ||
+    escrowStatus === "funded" ||
+    escrowStatus === "released" ||
+    escrowStatus === "refunded" ||
+    escrowStatus === "release_failed" ||
+    Boolean(order?.paymentConfirmedAt) ||
+    Boolean(order?.escrowFundedAt)
+  );
+};
+
+const _getEffectiveOrderQuote = (order) => {
+  const computedQuote = _calculateOrderQuote(Number(order?.totalPrice) || 0, {
+    depositPercent: order?.depositPercent,
+    insuranceFee: Number(order?.insuranceFee) || 0,
+  });
+
+  if (!_hasSettledOrderPricing(order)) {
+    return computedQuote;
+  }
+
+  return {
+    depositPercent: _resolveDepositPercent(order?.depositPercent),
+    depositAmount: Number.isFinite(Number(order?.depositAmount)) ? Number(order.depositAmount) : computedQuote.depositAmount,
+    balanceDue: Number.isFinite(Number(order?.balanceDue)) ? Number(order.balanceDue) : computedQuote.balanceDue,
+    serviceFee: Number.isFinite(Number(order?.serviceFee)) ? Number(order.serviceFee) : 0,
+    insuranceFee: Number.isFinite(Number(order?.insuranceFee)) ? Number(order.insuranceFee) : computedQuote.insuranceFee,
+    amountDueToday: Number.isFinite(Number(order?.amountDueToday)) ? Number(order.amountDueToday) : computedQuote.amountDueToday,
+  };
+};
+
+const _normalizePendingOrderPricing = async (order) => {
+  if (!order || _hasSettledOrderPricing(order)) {
+    return false;
+  }
+
+  const nextQuote = _calculateOrderQuote(Number(order.totalPrice) || 0, {
+    depositPercent: order.depositPercent,
+    insuranceFee: Number(order.insuranceFee) || 0,
+  });
+
+  let hasChanges = false;
+  for (const [key, value] of Object.entries(nextQuote)) {
+    const currentValue = Number(order[key]);
+    if (!Number.isFinite(currentValue) || currentValue !== value) {
+      order[key] = value;
+      hasChanges = true;
+    }
+  }
+
+  if (hasChanges) {
+    await order.save();
+  }
+
+  return hasChanges;
 };
 
 const _paymentMethodLabel = (method) => {
@@ -276,51 +341,55 @@ const _markBatchSoldIfFunded = async (orderLike) => {
   });
 };
 
-const _buildOrderSummaryFromDoc = (order) => ({
-  id: String(order._id),
-  orderNumber: order.orderNumber,
-  title: order.title,
-  cropKey: order.cropKey || "mixed",
-  cropNames: Array.isArray(order.cropNames) ? order.cropNames : [],
-  farmerName: order.farmerName || "Farmer",
-  destination: order.destination || "Kigali Central Aggregator",
-  status: order.status || "active",
-  paymentStatus: order.paymentStatus || "pending",
-  trackingStage: order.trackingStage || "awaiting_payment",
-  image: order.image || null,
-  totalWeight: Number(order.totalWeight) || 0,
-  totalPrice: Number(order.totalPrice) || 0,
-  pricePerKg: Number(order.pricePerKg) || 0,
-  currency: String(order.currency || "RWF").toUpperCase(),
-  depositPercent: Number(order.depositPercent) || 0.6,
-  depositAmount: Number(order.depositAmount) || 0,
-  balanceDue: Number(order.balanceDue) || 0,
-  serviceFee: Number(order.serviceFee) || 0,
-  insuranceFee: Number(order.insuranceFee) || 0,
-  amountDueToday: Number(order.amountDueToday) || 0,
-  paymentMethod: order.paymentMethod || "card",
-  escrowStatus: order.escrowStatus || "awaiting_payment",
-  stripeCheckoutSessionId: order.stripeCheckoutSessionId || null,
-  stripePaymentIntentId: order.stripePaymentIntentId || null,
-  stripeTransferId: order.stripeTransferId || null,
-  stripePaymentStatus: order.stripePaymentStatus || null,
-  mobileMoneyProvider: order.mobileMoneyProvider || null,
-  mobileMoneyProviderCode: order.mobileMoneyProviderCode || null,
-  mobileMoneyReference: order.mobileMoneyReference || null,
-  mobileMoneyExternalId: order.mobileMoneyExternalId || null,
-  mobileMoneyTransactionId: order.mobileMoneyTransactionId || null,
-  mobileMoneyStatus: order.mobileMoneyStatus || null,
-  mobileMoneyPayerMsisdn: order.mobileMoneyPayerMsisdn || null,
-  mobileMoneyLastWebhookAt: order.mobileMoneyLastWebhookAt ? new Date(order.mobileMoneyLastWebhookAt).toISOString() : null,
-  estimatedArrivalAt: order.estimatedArrivalAt ? new Date(order.estimatedArrivalAt).toISOString() : null,
-  trackingUpdatedAt: order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toISOString() : null,
-  paymentConfirmedAt: order.paymentConfirmedAt ? new Date(order.paymentConfirmedAt).toISOString() : null,
-  escrowFundedAt: order.escrowFundedAt ? new Date(order.escrowFundedAt).toISOString() : null,
-  escrowReleasedAt: order.escrowReleasedAt ? new Date(order.escrowReleasedAt).toISOString() : null,
-  deliveryConfirmedAt: order.deliveryConfirmedAt ? new Date(order.deliveryConfirmedAt).toISOString() : null,
-  createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : null,
-  updatedAt: order.updatedAt ? new Date(order.updatedAt).toISOString() : null,
-});
+const _buildOrderSummaryFromDoc = (order) => {
+  const quote = _getEffectiveOrderQuote(order);
+
+  return {
+    id: String(order._id),
+    orderNumber: order.orderNumber,
+    title: order.title,
+    cropKey: order.cropKey || "mixed",
+    cropNames: Array.isArray(order.cropNames) ? order.cropNames : [],
+    farmerName: order.farmerName || "Farmer",
+    destination: order.destination || "Kigali Central Aggregator",
+    status: order.status || "active",
+    paymentStatus: order.paymentStatus || "pending",
+    trackingStage: order.trackingStage || "awaiting_payment",
+    image: order.image || null,
+    totalWeight: Number(order.totalWeight) || 0,
+    totalPrice: Number(order.totalPrice) || 0,
+    pricePerKg: Number(order.pricePerKg) || 0,
+    currency: String(order.currency || "RWF").toUpperCase(),
+    depositPercent: quote.depositPercent,
+    depositAmount: quote.depositAmount,
+    balanceDue: quote.balanceDue,
+    serviceFee: quote.serviceFee,
+    insuranceFee: quote.insuranceFee,
+    amountDueToday: quote.amountDueToday,
+    paymentMethod: order.paymentMethod || "card",
+    escrowStatus: order.escrowStatus || "awaiting_payment",
+    stripeCheckoutSessionId: order.stripeCheckoutSessionId || null,
+    stripePaymentIntentId: order.stripePaymentIntentId || null,
+    stripeTransferId: order.stripeTransferId || null,
+    stripePaymentStatus: order.stripePaymentStatus || null,
+    mobileMoneyProvider: order.mobileMoneyProvider || null,
+    mobileMoneyProviderCode: order.mobileMoneyProviderCode || null,
+    mobileMoneyReference: order.mobileMoneyReference || null,
+    mobileMoneyExternalId: order.mobileMoneyExternalId || null,
+    mobileMoneyTransactionId: order.mobileMoneyTransactionId || null,
+    mobileMoneyStatus: order.mobileMoneyStatus || null,
+    mobileMoneyPayerMsisdn: order.mobileMoneyPayerMsisdn || null,
+    mobileMoneyLastWebhookAt: order.mobileMoneyLastWebhookAt ? new Date(order.mobileMoneyLastWebhookAt).toISOString() : null,
+    estimatedArrivalAt: order.estimatedArrivalAt ? new Date(order.estimatedArrivalAt).toISOString() : null,
+    trackingUpdatedAt: order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toISOString() : null,
+    paymentConfirmedAt: order.paymentConfirmedAt ? new Date(order.paymentConfirmedAt).toISOString() : null,
+    escrowFundedAt: order.escrowFundedAt ? new Date(order.escrowFundedAt).toISOString() : null,
+    escrowReleasedAt: order.escrowReleasedAt ? new Date(order.escrowReleasedAt).toISOString() : null,
+    deliveryConfirmedAt: order.deliveryConfirmedAt ? new Date(order.deliveryConfirmedAt).toISOString() : null,
+    createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+    updatedAt: order.updatedAt ? new Date(order.updatedAt).toISOString() : null,
+  };
+};
 
 const _buildTrackingTimeline = (order) => {
   const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
@@ -625,6 +694,8 @@ const createCheckoutSession = async (req, res) => {
     if (String(order.paymentStatus) === "deposit_paid" || String(order.escrowStatus) === "funded") {
       return res.status(400).json(failure("ORDER_ALREADY_PAID", "This order deposit has already been paid"));
     }
+
+    await _normalizePendingOrderPricing(order);
 
     const buyer = await User.findById(buyerId).select("fullName email phoneNumber").lean();
     if (!buyer) {
@@ -982,6 +1053,7 @@ const getOrderById = async (req, res) => {
     }
 
     await _syncOrderWithPaymentProvider(order);
+    await _normalizePendingOrderPricing(order);
     await _markBatchSoldIfFunded(order);
     const orderObject = order.toObject();
 
