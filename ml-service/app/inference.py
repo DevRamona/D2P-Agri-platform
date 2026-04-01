@@ -49,6 +49,41 @@ def _normalize_crop_hint(crop_hint: str | None) -> str:
     return "auto"
 
 
+KNOWN_DISEASES_BY_CROP: dict[str, set[str]] = {
+    "bean": {
+        "healthy",
+        "bean_rust",
+        "angular_leaf_spot",
+    },
+    "maize": {
+        "healthy",
+        "common_rust",
+        "gray_leaf_spot",
+        "northern_leaf_blight",
+    },
+}
+
+
+def _expected_crop_from_hint(crop_hint: str | None) -> str | None:
+    normalized_hint = _normalize_crop_hint(crop_hint)
+    if normalized_hint == "beans":
+        return "bean"
+    if normalized_hint == "maize":
+        return "maize"
+    return None
+
+
+def _disease_belongs_to_crop(disease_slug: str | None, crop_name: str | None) -> bool:
+    normalized_crop = _normalize_crop_name(crop_name)
+    normalized_disease = _normalize_disease_slug(disease_slug)
+    if normalized_disease in {"unknown", "uncertain"}:
+        return True
+    allowed = KNOWN_DISEASES_BY_CROP.get(normalized_crop)
+    if not allowed:
+        return True
+    return normalized_disease in allowed
+
+
 def _normalize_array(image: Image.Image, size: tuple[int, int] = (224, 224)) -> np.ndarray:
     resized = image.resize(size)
     array = np.asarray(resized, dtype=np.float32) / 255.0
@@ -520,6 +555,49 @@ def _parse_paligemma_response(text: str) -> tuple[str, str, str | None]:
     return diagnosis or "unknown", recommendation, source
 
 
+def _normalize_generation_result(
+    *,
+    diagnosis: str,
+    recommendation: str,
+    generated_text: str,
+    source: str | None,
+    crop_hint: str,
+) -> dict[str, Any]:
+    disease_slug = _normalize_disease_slug(diagnosis)
+    inferred_crop = _infer_crop_from_diagnosis(diagnosis, crop_hint=crop_hint)
+    expected_crop = _expected_crop_from_hint(crop_hint)
+    reasons: list[str] = []
+
+    if expected_crop and inferred_crop not in {"unknown", expected_crop}:
+        reasons.append(
+            f"Generated diagnosis appears to describe {inferred_crop} instead of the selected {expected_crop} crop.",
+        )
+
+    effective_crop = expected_crop or inferred_crop
+    if expected_crop and not _disease_belongs_to_crop(disease_slug, expected_crop):
+        reasons.append(
+            f"Generated disease '{disease_slug}' does not match the selected {expected_crop} crop.",
+        )
+
+    is_uncertain = disease_slug in {"unknown", "uncertain"} or len(reasons) > 0
+    if is_uncertain and not reasons:
+        reasons.append("Model could not extract a clear disease label.")
+
+    return {
+        "cropType": effective_crop or inferred_crop or "unknown",
+        "disease": "uncertain" if is_uncertain else disease_slug,
+        "candidateDisease": disease_slug,
+        "diagnosis": diagnosis,
+        "recommendation": recommendation,
+        "generatedText": generated_text,
+        "source": source,
+        "confidence": 0.0,
+        "isUncertain": is_uncertain,
+        "uncertaintyReasons": reasons,
+        "topPredictions": [],
+    }
+
+
 class PaliGemmaGenerationModel:
     def __init__(self):
         self.adapter_dir = os.getenv("PALIGEMMA_ADAPTER_DIR", os.path.join("model", "paligemma-rwanda-lora"))
@@ -606,23 +684,13 @@ class PaliGemmaGenerationModel:
         generated_text = self._processor.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
 
         diagnosis, recommendation, source = _parse_paligemma_response(generated_text)
-        disease_slug = _normalize_disease_slug(diagnosis)
-        crop_type = _infer_crop_from_diagnosis(diagnosis, crop_hint=crop_hint)
-        is_uncertain = disease_slug in {"unknown", "uncertain"}
-
-        return {
-            "cropType": crop_type,
-            "disease": disease_slug,
-            "candidateDisease": disease_slug,
-            "diagnosis": diagnosis,
-            "recommendation": recommendation,
-            "generatedText": generated_text,
-            "source": source,
-            "confidence": 0.0,
-            "isUncertain": is_uncertain,
-            "uncertaintyReasons": [] if not is_uncertain else ["Model could not extract a clear disease label."],
-            "topPredictions": [],
-        }
+        return _normalize_generation_result(
+            diagnosis=diagnosis,
+            recommendation=recommendation,
+            generated_text=generated_text,
+            source=source,
+            crop_hint=crop_hint,
+        )
 
 
 class PaliGemmaGenerationService:

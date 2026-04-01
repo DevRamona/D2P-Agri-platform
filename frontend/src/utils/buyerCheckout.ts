@@ -102,18 +102,16 @@ export const clearBuyerSelectedOrder = () => {
 
 export const getBuyerOrderQuote = (
   batch: BuyerSelectedBatch | null,
-  options?: { depositPercent?: number; serviceFeeRate?: number; serviceFeeMinimum?: number; insuranceFee?: number },
+  options?: { depositPercent?: number; insuranceFee?: number },
 ): BuyerOrderQuote => {
   const totalPrice = Number(batch?.totalPrice) || 0;
   const depositPercent = options?.depositPercent ?? ORDER_DEPOSIT_PERCENT;
-  const serviceFeeRate = options?.serviceFeeRate ?? 0.01;
-  const serviceFeeMinimum = options?.serviceFeeMinimum ?? 5000;
   const insuranceFee = options?.insuranceFee ?? 0;
 
   const depositAmount = Math.round(totalPrice * depositPercent);
   const balanceDue = Math.max(0, totalPrice - depositAmount);
-  const serviceFee = totalPrice > 0 ? Math.max(serviceFeeMinimum, Math.round(totalPrice * serviceFeeRate)) : 0;
-  const amountDueToday = depositAmount + serviceFee + insuranceFee;
+  const serviceFee = 0;
+  const amountDueToday = depositAmount + insuranceFee;
 
   return {
     depositPercent,

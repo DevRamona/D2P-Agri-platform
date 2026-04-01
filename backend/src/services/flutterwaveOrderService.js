@@ -47,6 +47,18 @@ const _resolveMethod = (order, verificationData) => {
   return getFlutterwaveProviderFromMethod(order?.paymentMethod);
 };
 
+const _getExpectedOrderAmount = (order) => {
+  const depositAmount = Math.round(Number(order?.depositAmount) || 0);
+  const insuranceFee = Math.round(Number(order?.insuranceFee) || 0);
+  const normalizedAmount = depositAmount + insuranceFee;
+
+  if (normalizedAmount > 0) {
+    return normalizedAmount;
+  }
+
+  return Math.round(Number(order?.amountDueToday) || 0);
+};
+
 const findBuyerOrderForFlutterwaveIdentifiers = async ({
   orderId,
   txRef,
@@ -103,7 +115,7 @@ const applyFlutterwaveVerificationToOrder = async ({
       verificationData?.amount_settled ??
       0,
   );
-  const expectedAmount = Math.round(Number(order.amountDueToday) || 0);
+  const expectedAmount = _getExpectedOrderAmount(order);
   const currency = String(verificationData?.currency || order.currency || "").toUpperCase();
   const expectedCurrency = String(order.currency || "").toUpperCase();
   const txRef = verificationData?.tx_ref ? String(verificationData.tx_ref) : null;

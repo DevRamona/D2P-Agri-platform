@@ -233,19 +233,6 @@ const BuyerOrderHistory = ({ onNavigate }: BuyerOrderHistoryProps) => {
         })}
       </div>
 
-      <div className="app-fab-row">
-        <button
-          type="button"
-          className="app-fab flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-3 text-xs font-semibold text-[#0b1307]"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-          Batch Export
-        </button>
-      </div>
-
       <nav className="app-bottom-nav mt-4 grid grid-cols-5 gap-2 rounded-[18px] border border-[var(--stroke)] bg-[var(--surface-2)] px-3 py-2">
         {[
           { label: "Home", active: false, target: "buyer-marketplace" as const },

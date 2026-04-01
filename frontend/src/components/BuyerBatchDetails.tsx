@@ -178,7 +178,7 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
             Escrow
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] p-3">
             <p className="m-0 text-xs text-[var(--muted)]">Amount Due Today</p>
             <p className="mt-2 text-base font-semibold text-[var(--accent)]">{formatCurrency(quote.amountDueToday)}</p>
@@ -190,10 +190,6 @@ const BuyerBatchDetails = ({ onNavigate }: BuyerBatchDetailsProps) => {
           <div className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] p-3">
             <p className="m-0 text-xs text-[var(--muted)]">Deposit</p>
             <p className="mt-2 text-sm font-semibold">{formatCurrency(quote.depositAmount)} ({Math.round(quote.depositPercent * 100)}%)</p>
-          </div>
-          <div className="rounded-[14px] border border-[var(--stroke)] bg-[var(--surface-2)] p-3">
-            <p className="m-0 text-xs text-[var(--muted)]">Service Fee</p>
-            <p className="mt-2 text-sm font-semibold">{formatCurrency(quote.serviceFee)}</p>
           </div>
         </div>
       </div>

@@ -121,3 +121,42 @@ def test_generate_returns_diagnosis_and_recommendation():
     assert "diagnosis" in item
     assert "recommendation" in item
     assert "generatedText" in item
+
+
+def test_generate_marks_cross_crop_diagnosis_as_uncertain():
+    class CrossCropGenerationService:
+        def generate_many(self, files, *, crop_hint: str = "auto"):
+            return [
+                {
+                    "imageId": "gen-1",
+                    "cropType": "maize",
+                    "disease": "uncertain",
+                    "candidateDisease": "bean_rust",
+                    "diagnosis": "Bean Rust",
+                    "recommendation": "Remove infected leaves.",
+                    "generatedText": "Disease: Bean Rust. Advice: Remove infected leaves.",
+                    "confidence": 0.0,
+                    "isUncertain": True,
+                    "uncertaintyReasons": [
+                        "Generated disease 'bean_rust' does not match the selected maize crop."
+                    ],
+                    "modelVersion": "paligemma-rwanda-lora-v1",
+                    "latencyMs": 10.0,
+                    "warnings": [],
+                }
+            ]
+
+    with patch("app.api.get_paligemma_generation_service", return_value=CrossCropGenerationService()):
+        response = client.post(
+            "/generate",
+            files=[("images", ("leaf-1.jpg", _make_image_bytes((40, 140, 20)), "image/jpeg"))],
+            data={"cropHint": "maize", "mode": "upload"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["cropType"] == "maize"
+    assert payload[0]["disease"] == "uncertain"
+    assert payload[0]["candidateDisease"] == "bean_rust"
+    assert payload[0]["isUncertain"] is True
+    assert any("does not match the selected maize crop" in reason for reason in payload[0]["uncertaintyReasons"])
